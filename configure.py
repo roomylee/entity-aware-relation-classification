@@ -23,6 +23,8 @@ def parse_args():
     # Model Hyper-parameters
     parser.add_argument("--word2vec", default=None,
                         type=str, help="Word2vec file with pre-trained embeddings")
+    parser.add_argument("--elmo", default=True,
+                        type=bool, help="ELMo embeddings")
     parser.add_argument("--embedding_size", default=300,
                         type=int, help="Dimensionality of character embedding (default: 300)")
     # parser.add_argument("--dist_embedding_dim", default=50,

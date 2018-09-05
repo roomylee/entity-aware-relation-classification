@@ -34,6 +34,7 @@ def train():
         vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
         vocab_processor.fit(x_text)
     x = np.array(list(vocab_processor.transform(x_text)))
+    x_text = np.array(x_text)
     print("Text Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
     print("x = {0}".format(x.shape))
     print("y = {0}".format(y.shape))
@@ -44,12 +45,14 @@ def train():
     shuffle_indices = np.random.permutation(np.arange(len(y)))
     x_shuffled = x[shuffle_indices]
     y_shuffled = y[shuffle_indices]
+    text_shuffled = x_text[shuffle_indices]
 
     # Split train/test set
     # TODO: This is very crude, should use cross-validation
     dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
     x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
     y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
+    text_train, text_dev = text_shuffled[:dev_sample_index], text_shuffled[dev_sample_index:]
     print("Train/Dev split: {:d}/{:d}\n".format(len(y_train), len(y_dev)))
 
     with tf.Graph().as_default():
@@ -65,6 +68,7 @@ def train():
                 embedding_size=FLAGS.embedding_size,
                 hidden_size=FLAGS.hidden_size,
                 attention_size=FLAGS.attention_size,
+                use_elmo=FLAGS.elmo,
                 l2_reg_lambda=FLAGS.l2_reg_lambda)
 
             # Define Training procedure
@@ -109,14 +113,15 @@ def train():
                 print("Success to load pre-trained word2vec model!\n")
 
             # Generate batches
-            batches = data_helpers.batch_iter(list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
+            batches = data_helpers.batch_iter(list(zip(x_train, y_train, text_train)), FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
             best_acc = 0.0  # For save checkpoint(model)
             for batch in batches:
-                x_batch, y_batch = zip(*batch)
+                x_batch, y_batch, text_batch = zip(*batch)
                 feed_dict = {
-                    model.input_text: x_batch,
+                    model.input_x: x_batch,
                     model.input_y: y_batch,
+                    model.input_text: text_batch,
                     model.rnn_dropout_keep_prob: FLAGS.rnn_dropout_keep_prob,
                     model.dropout_keep_prob: FLAGS.dropout_keep_prob
                 }
@@ -133,8 +138,9 @@ def train():
                 if step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
                     feed_dict = {
-                        model.input_text: x_dev,
+                        model.input_x: x_dev,
                         model.input_y: y_dev,
+                        model.input_text: text_dev,
                         model.rnn_dropout_keep_prob: 1.0,
                         model.dropout_keep_prob: 1.0
                     }

@@ -1,39 +1,45 @@
 import tensorflow as tf
 from tensorflow.contrib.rnn import LSTMCell
-
+import tensorflow_hub as hub
 from model.attention import attention
 
 
 class SelfAttentiveLSTM:
     def __init__(self, sequence_length, num_classes, vocab_size, embedding_size,
-                 hidden_size, attention_size, l2_reg_lambda=0.0):
+                 hidden_size, attention_size, use_elmo=False, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
-        self.input_text = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_text')
+        self.input_x = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_x')
         self.input_y = tf.placeholder(tf.float32, shape=[None, num_classes], name='input_y')
+        self.input_text = tf.placeholder(tf.string, shape=[None, ], name='input_text')
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
 
         # Keeping track of l2 regularization loss (optional)
         l2_loss = tf.constant(0.0)
-        text_length = self._length(self.input_text)
+        text_length = self._length(self.input_x)
 
-        # Embedding layer
-        with tf.device('/cpu:0'), tf.variable_scope("embeddings"):
-            self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0), name="W_text")
-            self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_text)
+        if use_elmo:
+            with tf.variable_scope("elmo-embeddings"):
+                elmo_model = hub.Module("https://tfhub.dev/google/elmo/2", trainable=True)
+                self.embedded_chars = elmo_model(self.input_text, signature="default", as_dict=True)["elmo"]
+        else:
+            # Embedding layer
+            with tf.device('/cpu:0'), tf.variable_scope("word-embeddings"):
+                self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0), name="W_text")
+                self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
 
-        with tf.variable_scope("self-attention"):
-            self.entity_att = self.multihead_attention(self.embedded_chars,
-                                                       self.embedded_chars,
-                                                       self.embedded_chars,
-                                                       dim_model=embedding_size, num_head=3)
+        # with tf.variable_scope("self-attention"):
+        #     self.entity_att = self.multihead_attention(self.embedded_chars,
+        #                                                self.embedded_chars,
+        #                                                self.embedded_chars,
+        #                                                dim_model=embedding_size, num_head=3)
 
         with tf.variable_scope("bi-rnn"):
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(LSTMCell(hidden_size), self.rnn_dropout_keep_prob)
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(LSTMCell(hidden_size), self.rnn_dropout_keep_prob)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                                   cell_bw=bw_cell,
-                                                                  inputs=self.entity_att,
+                                                                  inputs=self.embedded_chars,
                                                                   sequence_length=text_length,
                                                                   dtype=tf.float32)
 
