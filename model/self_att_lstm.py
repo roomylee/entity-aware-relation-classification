@@ -46,7 +46,7 @@ class SelfAttentiveLSTM:
             self.h_drop = tf.nn.dropout(self.att_output, self.dropout_keep_prob)
 
         # Fully connected layer
-        with tf.variable_scope('outputs'):
+        with tf.variable_scope('output'):
             W = tf.get_variable("W", shape=[hidden_size*2, num_classes],
                                 initializer=tf.contrib.layers.xavier_initializer())
             b = tf.Variable(tf.constant(0.0, shape=[num_classes]), name="b")
