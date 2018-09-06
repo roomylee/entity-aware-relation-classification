@@ -59,6 +59,7 @@ def train():
         session_conf = tf.ConfigProto(
             allow_soft_placement=FLAGS.allow_soft_placement,
             log_device_placement=FLAGS.log_device_placement)
+        session_conf.gpu_options.allow_growth = FLAGS.gpu_allow_growth
         sess = tf.Session(config=session_conf)
         with sess.as_default():
             model = SelfAttentiveLSTM(
@@ -115,7 +116,7 @@ def train():
             # Generate batches
             batches = data_helpers.batch_iter(list(zip(x_train, y_train, text_train)), FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
-            best_acc = 0.0  # For save checkpoint(model)
+            best_f1 = 0.0  # For save checkpoint(model)
             for batch in batches:
                 x_batch, y_batch, text_batch = zip(*batch)
                 feed_dict = {
@@ -147,16 +148,16 @@ def train():
                     summaries, loss, accuracy, predictions = sess.run(
                         [dev_summary_op, model.loss, model.accuracy, model.predictions], feed_dict)
                     dev_summary_writer.add_summary(summaries, step)
+                    f1 = f1_score(np.argmax(y_dev, axis=1), predictions, labels=np.array(range(1, 19)), average="macro")
 
                     time_str = datetime.datetime.now().isoformat()
                     print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
-                    print("(2*9+1)-Way Macro-Average F1 Score (excluding Other): {:g}\n".format(
-                        f1_score(np.argmax(y_dev, axis=1), predictions, labels=np.array(range(1, 19)), average="macro")))
+                    print("(2*9+1)-Way Macro-Average F1 Score (excluding Other): {:g}\n".format(f1))
 
                     # Model checkpoint
-                    if best_acc * 0.95 < accuracy:
-                        if best_acc < accuracy:
-                            best_acc = accuracy
+                    if best_f1 * 0.98 < f1:
+                        if best_f1 < f1:
+                            best_f1 = f1
                         path = saver.save(sess, checkpoint_prefix+"-{:.3g}".format(accuracy), global_step=step)
                         print("Saved model checkpoint to {}\n".format(path))
 
