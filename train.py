@@ -100,7 +100,7 @@ def train():
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
 
-            if FLAGS.word2vec:
+            if not FLAGS.elmo and FLAGS.word2vec:
                 pretrain_W = utils.load_word2vec(FLAGS.word2vec, FLAGS.embedding_size, vocab_processor)
                 sess.run(model.W_text.assign(pretrain_W))
                 print("Success to load pre-trained word2vec model!\n")
@@ -132,7 +132,8 @@ def train():
                 if step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
                     # Generate batches
-                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text)), 1, 1, shuffle=False)
+                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text)),
+                                                           FLAGS.batch_size, 1, shuffle=False)
                     # Training loop. For each batch...
                     losses = 0.0
                     accuracy = 0.0
@@ -151,10 +152,10 @@ def train():
                         test_summary_writer.add_summary(summaries, step)
                         losses += loss
                         accuracy += acc
-                        predictions.append(pred[0])
+                        predictions += pred
 
-                    losses /= len(test_y)
-                    accuracy /= len(test_y)
+                    losses /= int(len(test_y) / FLAGS.batch_size)
+                    accuracy /= int(len(test_y) / FLAGS.batch_size)
                     predictions = np.array(predictions, dtype='int')
                     f1 = f1_score(np.argmax(test_y, axis=1), predictions, labels=np.array(range(1, 19)), average="macro")
 
