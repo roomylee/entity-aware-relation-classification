@@ -95,7 +95,7 @@ def train():
 
             # Write vocabulary
             vocab_processor.save(os.path.join(out_dir, "vocab"))
-            utils.save_result(np.argmax(test_y, axis=1), os.path.join(out_dir, FLAGS.target_path, mkdir=True))
+            utils.save_result(np.argmax(test_y, axis=1), os.path.join(out_dir, FLAGS.target_path), mkdir=True)
 
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
