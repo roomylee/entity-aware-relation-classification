@@ -8,7 +8,7 @@ from sklearn.metrics import f1_score
 import data_helpers
 import configure
 from model.self_att_lstm import SelfAttentiveLSTM
-from utils import load_word2vec
+import utils
 
 import warnings
 import sklearn.exceptions
@@ -20,7 +20,9 @@ FLAGS = configure.parse_args()
 
 def train():
     with tf.device('/cpu:0'):
-        x_text, y = data_helpers.load_data_and_labels(FLAGS.train_path)
+        train_text, train_y = data_helpers.load_data_and_labels(FLAGS.train_path)
+    with tf.device('/cpu:0'):
+        test_text, test_y = data_helpers.load_data_and_labels(FLAGS.test_path)
 
     # Build vocabulary
     # Example: x_text[3] = "A misty <e1>ridge</e1> uprises from the <e2>surge</e2>."
@@ -32,28 +34,17 @@ def train():
         vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(FLAGS.vocab_path)
     else:
         vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
-        vocab_processor.fit(x_text)
-    x = np.array(list(vocab_processor.transform(x_text)))
-    x_text = np.array(x_text)
+        vocab_processor.fit(train_text)
+    train_x = np.array(list(vocab_processor.transform(train_text)))
+    test_x = np.array(list(vocab_processor.transform(test_text)))
+    train_text = np.array(train_text)
+    test_text = np.array(test_text)
     print("Text Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
-    print("x = {0}".format(x.shape))
-    print("y = {0}".format(y.shape))
+    print("train_x = {0}".format(train_x.shape))
+    print("train_y = {0}".format(train_y.shape))
+    print("test_x = {0}".format(test_x.shape))
+    print("test_y = {0}".format(test_y.shape))
     print("")
-
-    # Randomly shuffle data
-    np.random.seed(10)
-    shuffle_indices = np.random.permutation(np.arange(len(y)))
-    x_shuffled = x[shuffle_indices]
-    y_shuffled = y[shuffle_indices]
-    text_shuffled = x_text[shuffle_indices]
-
-    # Split train/test set
-    # TODO: This is very crude, should use cross-validation
-    dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
-    x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
-    y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
-    text_train, text_dev = text_shuffled[:dev_sample_index], text_shuffled[dev_sample_index:]
-    print("Train/Dev split: {:d}/{:d}\n".format(len(y_train), len(y_dev)))
 
     with tf.Graph().as_default():
         session_conf = tf.ConfigProto(
@@ -63,8 +54,8 @@ def train():
         sess = tf.Session(config=session_conf)
         with sess.as_default():
             model = SelfAttentiveLSTM(
-                sequence_length=x_train.shape[1],
-                num_classes=y_train.shape[1],
+                sequence_length=train_x.shape[1],
+                num_classes=train_y.shape[1],
                 vocab_size=len(vocab_processor.vocabulary_),
                 embedding_size=FLAGS.embedding_size,
                 hidden_size=FLAGS.hidden_size,
@@ -91,9 +82,9 @@ def train():
             train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
 
             # Dev summaries
-            dev_summary_op = tf.summary.merge([loss_summary, acc_summary])
-            dev_summary_dir = os.path.join(out_dir, "summaries", "dev")
-            dev_summary_writer = tf.summary.FileWriter(dev_summary_dir, sess.graph)
+            test_summary_op = tf.summary.merge([loss_summary, acc_summary])
+            test_summary_dir = os.path.join(out_dir, "summaries", "dev")
+            test_summary_writer = tf.summary.FileWriter(test_summary_dir, sess.graph)
 
             # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
             checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
@@ -104,25 +95,27 @@ def train():
 
             # Write vocabulary
             vocab_processor.save(os.path.join(out_dir, "vocab"))
+            utils.save_result(np.argmax(test_y, axis=1), os.path.join(out_dir, FLAGS.target_path, mkdir=True))
 
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
 
             if FLAGS.word2vec:
-                pretrain_W = load_word2vec(FLAGS.word2vec, FLAGS.embedding_size, vocab_processor)
+                pretrain_W = utils.load_word2vec(FLAGS.word2vec, FLAGS.embedding_size, vocab_processor)
                 sess.run(model.W_text.assign(pretrain_W))
                 print("Success to load pre-trained word2vec model!\n")
 
             # Generate batches
-            batches = data_helpers.batch_iter(list(zip(x_train, y_train, text_train)), FLAGS.batch_size, FLAGS.num_epochs)
+            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text)),
+                                              FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
             best_f1 = 0.0  # For save checkpoint(model)
-            for batch in batches:
-                x_batch, y_batch, text_batch = zip(*batch)
+            for train_batch in train_batches:
+                train_bx, train_by, train_btxt = zip(*train_batch)
                 feed_dict = {
-                    model.input_x: x_batch,
-                    model.input_y: y_batch,
-                    model.input_text: text_batch,
+                    model.input_x: train_bx,
+                    model.input_y: train_by,
+                    model.input_text: train_btxt,
                     model.rnn_dropout_keep_prob: FLAGS.rnn_dropout_keep_prob,
                     model.dropout_keep_prob: FLAGS.dropout_keep_prob
                 }
@@ -138,27 +131,44 @@ def train():
                 # Evaluation
                 if step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
-                    feed_dict = {
-                        model.input_x: x_dev,
-                        model.input_y: y_dev,
-                        model.input_text: text_dev,
-                        model.rnn_dropout_keep_prob: 1.0,
-                        model.dropout_keep_prob: 1.0
-                    }
-                    summaries, loss, accuracy, predictions = sess.run(
-                        [dev_summary_op, model.loss, model.accuracy, model.predictions], feed_dict)
-                    dev_summary_writer.add_summary(summaries, step)
-                    f1 = f1_score(np.argmax(y_dev, axis=1), predictions, labels=np.array(range(1, 19)), average="macro")
+                    # Generate batches
+                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text)), 1, 1, shuffle=False)
+                    # Training loop. For each batch...
+                    losses = 0.0
+                    accuracy = 0.0
+                    predictions = []
+                    for test_batch in test_batches:
+                        test_bx, test_by, test_btxt = zip(*test_batch)
+                        feed_dict = {
+                            model.input_x: test_bx,
+                            model.input_y: test_by,
+                            model.input_text: test_btxt,
+                            model.rnn_dropout_keep_prob: 1.0,
+                            model.dropout_keep_prob: 1.0
+                        }
+                        summaries, loss, acc, pred = sess.run(
+                            [test_summary_op, model.loss, model.accuracy, model.predictions], feed_dict)
+                        test_summary_writer.add_summary(summaries, step)
+                        losses += loss
+                        accuracy += acc
+                        predictions.append(pred[0])
+
+                    losses /= len(test_y)
+                    accuracy /= len(test_y)
+                    predictions = np.array(predictions, dtype='int')
+                    f1 = f1_score(np.argmax(test_y, axis=1), predictions, labels=np.array(range(1, 19)), average="macro")
 
                     time_str = datetime.datetime.now().isoformat()
-                    print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+                    print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, losses, accuracy))
                     print("(2*9+1)-Way Macro-Average F1 Score (excluding Other): {:g}\n".format(f1))
 
                     # Model checkpoint
                     if best_f1 * 0.98 < f1:
                         if best_f1 < f1:
                             best_f1 = f1
-                        path = saver.save(sess, checkpoint_prefix+"-{:.3g}".format(accuracy), global_step=step)
+                        path = saver.save(sess, checkpoint_prefix+"-{:.3g}".format(f1), global_step=step)
+                        output_path = FLAGS.output_path[:-4]+"-{:.3g}-{}".format(f1, step)+".txt"
+                        utils.save_result(predictions, os.path.join(out_dir, output_path))
                         print("Saved model checkpoint to {}\n".format(path))
 
 
