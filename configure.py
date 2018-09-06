@@ -23,12 +23,10 @@ def parse_args():
     # Model Hyper-parameters
     parser.add_argument("--word2vec", default=None,
                         type=str, help="Word2vec file with pre-trained embeddings")
-    parser.add_argument("--elmo", default=True,
+    parser.add_argument("--elmo", default=False,
                         type=bool, help="ELMo embeddings")
     parser.add_argument("--embedding_size", default=300,
                         type=int, help="Dimensionality of character embedding (default: 300)")
-    # parser.add_argument("--dist_embedding_dim", default=50,
-    #                     type=int, help="Dimensionality of character embedding (default: 50)")
     parser.add_argument("--hidden_size", default=512,
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
     parser.add_argument("--attention_size", default=50,
@@ -41,7 +39,7 @@ def parse_args():
                         type=float, help="L2 regularization lambda (default: 0.0)")
 
     # Training parameters
-    parser.add_argument("--batch_size", default=64,
+    parser.add_argument("--batch_size", default=10,
                         type=int, help="Batch Size (default: 64)")
     parser.add_argument("--num_epochs", default=100,
                         type=int, help="Number of training epochs (Default: 100)")
@@ -51,8 +49,8 @@ def parse_args():
                         type=int, help="Evaluate model on dev set after this many steps (default: 100)")
     parser.add_argument("--num_checkpoints", default=10,
                         type=int, help="Number of checkpoints to store (default: 5)")
-    parser.add_argument("--learning_rate", default=1e-4,
-                        type=float, help="Which learning rate to start with (Default: 1e-4)")
+    parser.add_argument("--learning_rate", default=1e-3,
+                        type=float, help="Which learning rate to start with (Default: 1e-3)")
 
     # Testing Parameters
     parser.add_argument("--checkpoint_dir", default="",
@@ -67,6 +65,8 @@ def parse_args():
                         type=bool, help="Allow device soft device placement")
     parser.add_argument("--log_device_placement", default=False,
                         type=bool, help="Log placement of ops on devices")
+    parser.add_argument("--gpu_allow_growth", default=True,
+                        type=bool, help="Allow gpu memory growth")
 
     if len(sys.argv) == 0:
         parser.print_help()

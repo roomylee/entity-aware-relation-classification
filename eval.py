@@ -22,6 +22,7 @@ def eval():
     text_vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(text_path)
     x_eval = np.array(list(text_vocab_processor.transform(x_text)))
     y_eval = np.argmax(y, axis=1)
+    x_text_eval = np.array(x_text)
 
     checkpoint_file = tf.train.latest_checkpoint(FLAGS.checkpoint_dir)
 
@@ -37,8 +38,9 @@ def eval():
             saver.restore(sess, checkpoint_file)
 
             # Get the placeholders from the graph by name
-            input_text = graph.get_operation_by_name("input_text").outputs[0]
+            input_x = graph.get_operation_by_name("input_x").outputs[0]
             # input_y = graph.get_operation_by_name("input_y").outputs[0]
+            # input_text = graph.get_operation_by_name("input_text").outputs[0]
             rnn_dropout_keep_prob = graph.get_operation_by_name("rnn_dropout_keep_prob").outputs[0]
             dropout_keep_prob = graph.get_operation_by_name("dropout_keep_prob").outputs[0]
 
@@ -51,7 +53,7 @@ def eval():
             # Collect the predictions here
             all_predictions = []
             for x_batch in batches:
-                batch_predictions = sess.run(predictions, {input_text: x_batch,
+                batch_predictions = sess.run(predictions, {input_x: x_batch,
                                                            rnn_dropout_keep_prob: 1.0,
                                                            dropout_keep_prob: 1.0})
                 all_predictions = np.concatenate([all_predictions, batch_predictions])
