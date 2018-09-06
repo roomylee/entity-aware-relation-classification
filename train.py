@@ -152,7 +152,7 @@ def train():
                         test_summary_writer.add_summary(summaries, step)
                         losses += loss
                         accuracy += acc
-                        predictions += pred
+                        predictions += pred.tolist()
 
                     losses /= int(len(test_y) / FLAGS.batch_size)
                     accuracy /= int(len(test_y) / FLAGS.batch_size)
