@@ -20,9 +20,9 @@ FLAGS = configure.parse_args()
 
 def train():
     with tf.device('/cpu:0'):
-        train_text, train_y = data_helpers.load_data_and_labels(FLAGS.train_path)
+        train_text, train_e1, train_e2, train_y = data_helpers.load_data_and_labels(FLAGS.train_path)
     with tf.device('/cpu:0'):
-        test_text, test_y = data_helpers.load_data_and_labels(FLAGS.test_path)
+        test_text, test_e1, test_e2, test_y = data_helpers.load_data_and_labels(FLAGS.test_path)
 
     # Build vocabulary
     # Example: x_text[3] = "A misty <e1>ridge</e1> uprises from the <e2>surge</e2>."

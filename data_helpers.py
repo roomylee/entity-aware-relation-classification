@@ -11,11 +11,11 @@ def clean_str(string):
     """
     string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
     string = re.sub(r"\'s", " \'s", string)
-    string = re.sub(r"\'ve", " \'ve", string)
-    string = re.sub(r"n\'t", " n\'t", string)
-    string = re.sub(r"\'re", " \'re", string)
-    string = re.sub(r"\'d", " \'d", string)
-    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r"\'ve", " have", string)
+    string = re.sub(r"n\'t", " not", string)
+    string = re.sub(r"\'re", " are", string)
+    string = re.sub(r"\'d", " would", string)
+    string = re.sub(r"\'ll", " will", string)
     string = re.sub(r",", " , ", string)
     string = re.sub(r"!", " ! ", string)
     string = re.sub(r"\(", " \( ", string)
@@ -33,15 +33,20 @@ def load_data_and_labels(path):
         relation = lines[idx + 1]
 
         sentence = lines[idx].split("\t")[1][1:-1]
-        sentence = sentence.replace('<e1>', 'e11 ')
-        sentence = sentence.replace('</e1>', ' e12')
-        sentence = sentence.replace('<e2>', 'e21 ')
-        sentence = sentence.replace('</e2>', ' e22')
+        sentence = sentence.replace('<e1>', ' _e11_ ')
+        sentence = sentence.replace('</e1>', ' _e12_ ')
+        sentence = sentence.replace('<e2>', ' _e21_ ')
+        sentence = sentence.replace('</e2>', ' _e22_ ')
+
+        tokens = nltk.word_tokenize(sentence)
+        e1 = tokens.index("_e11_") + 1
+        e2 = tokens.index("_e21_") + 1
+        sentence = " ".join(tokens)
         sentence = clean_str(sentence)
 
-        data.append([id, sentence, relation])
+        data.append([id, sentence, e1, e2, relation])
 
-    df = pd.DataFrame(data=data, columns=["id", "sentence", "relation"])
+    df = pd.DataFrame(data=data, columns=["id", "sentence", "e1", "e2", "relation"])
     labelsMapping = {'Other': 0,
                      'Message-Topic(e1,e2)': 1, 'Message-Topic(e2,e1)': 2,
                      'Product-Producer(e1,e2)': 3, 'Product-Producer(e2,e1)': 4,
@@ -56,6 +61,8 @@ def load_data_and_labels(path):
 
     # Text Data
     x_text = df['sentence'].tolist()
+    e1 = df['e1'].tolist()
+    e2 = df['e2'].tolist()
 
     # Label Data
     y = df['label']
@@ -77,7 +84,7 @@ def load_data_and_labels(path):
     labels = dense_to_one_hot(labels_flat, labels_count)
     labels = labels.astype(np.uint8)
 
-    return x_text, labels
+    return x_text, e1, e2, labels
 
 
 def batch_iter(data, batch_size, num_epochs, shuffle=True):
