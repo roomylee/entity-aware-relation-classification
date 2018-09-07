@@ -33,6 +33,10 @@ def load_data_and_labels(path):
         relation = lines[idx + 1]
 
         sentence = lines[idx].split("\t")[1][1:-1]
+        sentence = sentence.replace('<e1>', 'e11')
+        sentence = sentence.replace('</e1>', 'e12')
+        sentence = sentence.replace('<e2>', 'e21')
+        sentence = sentence.replace('</e2>', 'e22')
         sentence = clean_str(sentence)
 
         data.append([id, sentence, relation])
