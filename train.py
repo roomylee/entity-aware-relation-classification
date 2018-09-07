@@ -8,7 +8,6 @@ from sklearn.metrics import f1_score
 import data_helpers
 import configure
 from model.self_att_lstm import SelfAttentiveLSTM
-from model.rcnn import TextRCNN
 import utils
 
 import warnings

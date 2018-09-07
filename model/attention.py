@@ -80,9 +80,40 @@ def attention(inputs, attention_size, time_major=False, return_alphas=False):
         return output, alphas
 
 
+def dot_self_attention(x, scale_factor=0.05):
+    QK_T = tf.matmul(x, tf.transpose(x, [0, 2, 1]))
+    att = tf.nn.softmax(QK_T / scale_factor)
+    output = tf.matmul(att, x)
+    return output
+
+
+def add_self_attention(x):
+    x1 = tf.layers.dense(x, 102)
+    x2 = tf.layers.dense(x, 102)
+    e = tf.layers.dense(tf.tanh(x1+x2), 102)
+    att = tf.nn.softmax(e)
+    output = tf.matmul(att, x)
+    return output
+
+
+def input_attention(x, e1, e2):
+    # lW = tf.get_variable("lW", shape=[512, 300], initializer=tf.contrib.layers.xavier_initializer())
+    # A = tf.tanh(tf.matmul(x, lW))
+    A = tf.layers.dense(x, 300, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    A1 = tf.matmul(A, tf.expand_dims(e1, -1))
+    A2 = tf.matmul(A, tf.expand_dims(e2, -1))
+    A1 = tf.reshape(A1, [-1, 102])
+    A2 = tf.reshape(A2, [-1, 102])
+    alpha1 = tf.nn.softmax(A1)
+    alpha2 = tf.nn.softmax(A2)
+    alpha = (alpha1 + alpha2) / 2
+
+    return tf.multiply(x, tf.expand_dims(alpha, -1))
+
+
 def multihead_attention(queries,
                         keys,
-                        num_units=300,
+                        num_units=None,
                         num_heads=3,
                         dropout_rate=0,
                         is_training=True,
@@ -108,8 +139,8 @@ def multihead_attention(queries,
     '''
     with tf.variable_scope(scope, reuse=reuse):
         # Set the fall back option for num_units
-        # if num_units is None:
-        #     num_units = queries.get_shape().as_list[-1]
+        if num_units is None:
+            num_units = queries.get_shape()[-1]
 
         # Linear projections
         Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu)  # (N, T_q, C)
