@@ -15,8 +15,6 @@ def parse_args():
                         type=str, help="Path of test data")
     parser.add_argument("--max_sentence_length", default=102,
                         type=int, help="Max sentence length in data")
-    parser.add_argument("--vocab_path", default=None,
-                        type=str, help="Path of vocabulary")
 
     # Model Hyper-parameters
     parser.add_argument("--word2vec", default=None,

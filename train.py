@@ -30,11 +30,8 @@ def train():
     # =>
     # [27 39 40 41 42  1 43  0  0 ... 0]
     # dimension = MAX_SENTENCE_LENGTH
-    if FLAGS.vocab_path:
-        vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(FLAGS.vocab_path)
-    else:
-        vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
-        vocab_processor.fit(train_text)
+    vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
+    vocab_processor.fit(train_text)
     train_x = np.array(list(vocab_processor.transform(train_text)))
     test_x = np.array(list(vocab_processor.transform(test_text)))
     train_text = np.array(train_text)
