@@ -78,3 +78,94 @@ def attention(inputs, attention_size, time_major=False, return_alphas=False):
         return output
     else:
         return output, alphas
+
+
+def dot_self_attention(x, scale_factor):
+    QK_T = tf.matmul(x, tf.transpose(x, [0, 2, 1]))
+    att = tf.nn.softmax(QK_T / tf.sqrt(scale_factor))
+    output = tf.matmul(att, x)
+    return output
+
+
+def add_self_attention(x):
+    x1 = tf.layers.dense(x, 102)
+    x2 = tf.layers.dense(x, 102)
+    e = tf.layers.dense(tf.tanh(x1+x2), 102)
+    att = tf.nn.softmax(e)
+    output = tf.matmul(att, x)
+    return output
+
+
+def input_attention(x, e1, e2):
+    A1 = tf.tanh(tf.matmul(x, tf.expand_dims(e1, -1)))
+    A2 = tf.tanh(tf.matmul(x, tf.expand_dims(e2, -1)))
+    A1 = tf.reshape(A1, [-1, 102])
+    A2 = tf.reshape(A2, [-1, 102])
+    alpha1 = tf.nn.softmax(A1)
+    alpha2 = tf.nn.softmax(A2)
+    alpha = (alpha1 + alpha2) / 2
+
+    return tf.multiply(x, tf.expand_dims(alpha, -1))
+
+
+def multihead_attention(query, key, value, dim_model=100, num_head=3):
+    # Linear projections
+    Q = tf.layers.dense(query, dim_model*num_head, activation=tf.nn.relu)  # (N, T_q, C)
+    K = tf.layers.dense(key, dim_model*num_head, activation=tf.nn.relu)  # (N, T_k, C)
+    V = tf.layers.dense(value, dim_model*num_head, activation=tf.nn.relu)  # (N, T_k, C)
+
+    # Split and concat
+    Q_ = tf.concat(tf.split(Q, num_head, axis=2), axis=0)  # (h*N, T_q, C/h)
+    K_ = tf.concat(tf.split(K, num_head, axis=2), axis=0)  # (h*N, T_k, C/h)
+    V_ = tf.concat(tf.split(V, num_head, axis=2), axis=0)  # (h*N, T_k, C/h)
+
+    # Scaled Dot Product Attention
+    with tf.variable_scope("scaled-dot-product-attention"):
+        QK_T = tf.matmul(Q_, tf.transpose(K_, [0, 2, 1]))
+        QK_T /= K_.get_shape().as_list()[-1] ** 0.5
+        att = tf.nn.softmax(QK_T)
+        # outputs = tf.nn.dropout(att, 0.8)
+        # Weighted sum
+        outputs = tf.matmul(att, V_)  # ( h*N, T_q, C/h)
+        # Restore shape
+        outputs = tf.concat(tf.split(outputs, num_head, axis=0), axis=2)  # (N, T_q, C)
+
+    # # Residual connection
+    # outputs += query
+
+    outputs = tf.layers.dense(outputs, dim_model * num_head, activation=tf.nn.relu)
+
+    # Normalize
+    outputs = normalize(outputs)  # (N, T_q, C)
+
+    return outputs
+
+
+def normalize(inputs,
+              epsilon=1e-8,
+              scope="ln",
+              reuse=None):
+    '''Applies layer normalization.
+
+    Args:
+      inputs: A tensor with 2 or more dimensions, where the first dimension has
+        `batch_size`.
+      epsilon: A floating number. A very small number for preventing ZeroDivision Error.
+      scope: Optional scope for `variable_scope`.
+      reuse: Boolean, whether to reuse the weights of a previous layer
+        by the same name.
+
+    Returns:
+      A tensor with the same shape and data dtype as `inputs`.
+    '''
+    with tf.variable_scope(scope, reuse=reuse):
+        inputs_shape = inputs.get_shape()
+        params_shape = inputs_shape[-1:]
+
+        mean, variance = tf.nn.moments(inputs, [-1], keep_dims=True)
+        beta = tf.Variable(tf.zeros(params_shape))
+        gamma = tf.Variable(tf.ones(params_shape))
+        normalized = (inputs - mean) / ((variance + epsilon) ** (.5))
+        outputs = gamma * normalized + beta
+
+    return outputs
