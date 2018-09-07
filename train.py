@@ -8,6 +8,7 @@ from sklearn.metrics import f1_score
 import data_helpers
 import configure
 from model.self_att_lstm import SelfAttentiveLSTM
+from model.rcnn import TextRCNN
 import utils
 
 import warnings
@@ -103,15 +104,17 @@ def train():
                 print("Success to load pre-trained word2vec model!\n")
 
             # Generate batches
-            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text)),
+            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text, train_e1, train_e2)),
                                               FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
             best_f1 = 0.0  # For save checkpoint(model)
             for train_batch in train_batches:
-                train_bx, train_by, train_btxt = zip(*train_batch)
+                train_bx, train_by, train_btxt, train_be1, train_be2 = zip(*train_batch)
                 feed_dict = {
                     model.input_x: train_bx,
                     model.input_y: train_by,
+                    model.input_e1: train_be1,
+                    model.input_e2: train_be2,
                     model.input_text: train_btxt,
                     model.rnn_dropout_keep_prob: FLAGS.rnn_dropout_keep_prob,
                     model.dropout_keep_prob: FLAGS.dropout_keep_prob
@@ -129,17 +132,19 @@ def train():
                 if step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
                     # Generate batches
-                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text)),
+                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text, test_e1, test_e2)),
                                                            FLAGS.batch_size, 1, shuffle=False)
                     # Training loop. For each batch...
                     losses = 0.0
                     accuracy = 0.0
                     predictions = []
                     for test_batch in test_batches:
-                        test_bx, test_by, test_btxt = zip(*test_batch)
+                        test_bx, test_by, test_btxt, test_be1, test_be2 = zip(*test_batch)
                         feed_dict = {
                             model.input_x: test_bx,
                             model.input_y: test_by,
+                            model.input_e1: test_be1,
+                            model.input_e2: test_be2,
                             model.input_text: test_btxt,
                             model.rnn_dropout_keep_prob: 1.0,
                             model.dropout_keep_prob: 1.0
