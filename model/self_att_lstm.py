@@ -9,14 +9,12 @@ class SelfAttentiveLSTM:
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_x')
         self.input_y = tf.placeholder(tf.float32, shape=[None, num_classes], name='input_y')
+        self.input_text = tf.placeholder(tf.string, shape=[None, ], name='input_text')
         self.input_e1 = tf.placeholder(tf.int32, shape=[None, ], name='input_e1')
         self.input_e2 = tf.placeholder(tf.int32, shape=[None, ], name='input_e2')
-        self.input_text = tf.placeholder(tf.string, shape=[None, ], name='input_text')
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
 
-        # Keeping track of l2 regularization loss (optional)
-        l2_loss = tf.constant(0.0)
         initializer = tf.contrib.layers.xavier_initializer()
         text_length = self._length(self.input_x)
 
@@ -29,6 +27,11 @@ class SelfAttentiveLSTM:
             with tf.device('/cpu:0'), tf.variable_scope("word-embeddings"):
                 self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0), name="W_text")
                 self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
+
+        with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
+            self.W_dist = tf.Variable(tf.random_uniform([clip_k*2+3, 100], -1.0, 1.0), name="W_dist")
+            self.a1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
+            self.a2 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
 
         with tf.variable_scope("self-attention"):
             self.entity_att = multihead_attention(self.embedded_chars, self.embedded_chars)
@@ -56,15 +59,14 @@ class SelfAttentiveLSTM:
         with tf.variable_scope('output'):
             W = tf.get_variable("W", shape=[hidden_size*2, num_classes], initializer=initializer)
             b = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b")
-            l2_loss += tf.nn.l2_loss(W)
-            l2_loss += tf.nn.l2_loss(b)
             self.logits = tf.nn.xw_plus_b(self.h_drop, W, b, name="logits")
             self.predictions = tf.argmax(self.logits, 1, name="predictions")
 
         # Calculate mean cross-entropy loss
         with tf.variable_scope("loss"):
             losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.input_y)
-            self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
+            self.l2 = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables()])
+            self.loss = tf.reduce_mean(losses) + l2_reg_lambda * self.l2
 
         # Accuracy
         with tf.variable_scope("accuracy"):
