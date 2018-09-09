@@ -17,10 +17,8 @@ def parse_args():
                         type=int, help="Max sentence length in data")
 
     # Model Hyper-parameters
-    parser.add_argument("--word2vec", default=None,
-                        type=str, help="Word2vec file with pre-trained embeddings")
-    parser.add_argument("--elmo", default=False,
-                        type=bool, help="ELMo embeddings")
+    parser.add_argument("--embeddings", default=None,
+                        type=str, help="Embeddings {'word2vec', 'glove100', 'glove300', 'elmo'}")
     parser.add_argument("--embedding_size", default=300,
                         type=int, help="Dimensionality of character embedding (default: 300)")
     parser.add_argument("--hidden_size", default=512,
@@ -31,7 +29,7 @@ def parse_args():
                         type=float, help="Dropout keep probability of RNN (default: 0.8)")
     parser.add_argument("--dropout_keep_prob", default=0.5,
                         type=float, help="Dropout keep probability of output layer (default: 0.5)")
-    parser.add_argument("--l2_reg_lambda", default=0.0,
+    parser.add_argument("--l2_reg_lambda", default=0.0001,
                         type=float, help="L2 regularization lambda (default: 0.0)")
 
     # Training parameters

@@ -114,7 +114,7 @@ def input_attention(x, e1, e2):
 def multihead_attention(queries,
                         keys,
                         num_units=None,
-                        num_heads=3,
+                        num_heads=4,
                         dropout_rate=0,
                         is_training=True,
                         causality=False,

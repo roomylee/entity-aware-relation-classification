@@ -12,7 +12,6 @@ labelsMapping = {0: 'Other',
                  15: 'Member-Collection(e1,e2)', 16: 'Member-Collection(e2,e1)',
                  17: 'Content-Container(e1,e2)', 18: 'Content-Container(e2,e1)'}
 
-
 def load_word2vec(word2vec_path, embedding_dim, vocab):
     # initial matrix with random uniform
     initW = np.random.uniform(-0.25, 0.25, (len(vocab.vocabulary_), embedding_dim))
@@ -36,6 +35,22 @@ def load_word2vec(word2vec_path, embedding_dim, vocab):
                 initW[idx] = np.fromstring(f.read(binary_len), dtype='float32')
             else:
                 f.read(binary_len)
+    return initW
+
+
+def load_glove(word2vec_path, embedding_dim, vocab):
+    # initial matrix with random uniform
+    initW = np.random.uniform(-0.25, 0.25, (len(vocab.vocabulary_), embedding_dim))
+    # load any vectors from the word2vec
+    print("Load word2vec file {0}".format(word2vec_path))
+    f = open(word2vec_path, 'r', encoding='utf8')
+    for line in f:
+        splitLine = line.split(' ')
+        word = splitLine[0]
+        embedding = np.asarray(splitLine[1:], dtype='float32')
+        idx = vocab.vocabulary_.get(word)
+        if idx != 0:
+            initW[idx] = embedding
     return initW
 
 

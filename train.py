@@ -57,7 +57,7 @@ def train():
                 embedding_size=FLAGS.embedding_size,
                 hidden_size=FLAGS.hidden_size,
                 attention_size=FLAGS.attention_size,
-                use_elmo=FLAGS.elmo,
+                use_elmo=(FLAGS.embeddings == 'elmo'),
                 l2_reg_lambda=FLAGS.l2_reg_lambda)
 
             # Define Training procedure
@@ -97,10 +97,18 @@ def train():
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
 
-            if not FLAGS.elmo and FLAGS.word2vec:
-                pretrain_W = utils.load_word2vec(FLAGS.word2vec, FLAGS.embedding_size, vocab_processor)
+            if FLAGS.embeddings == "word2vec":
+                pretrain_W = utils.load_word2vec('resource/GoogleNews-vectors-negative300.bin', FLAGS.embedding_size, vocab_processor)
                 sess.run(model.W_text.assign(pretrain_W))
                 print("Success to load pre-trained word2vec model!\n")
+            elif FLAGS.embeddings == "glove100":
+                pretrain_W = utils.load_glove('resource/glove.6B.100d.txt', FLAGS.embedding_size, vocab_processor)
+                sess.run(model.W_text.assign(pretrain_W))
+                print("Success to load pre-trained glove100 model!\n")
+            elif FLAGS.embeddings == "glove300":
+                pretrain_W = utils.load_glove('resource/glove.840B.300d.txt', FLAGS.embedding_size, vocab_processor)
+                sess.run(model.W_text.assign(pretrain_W))
+                print("Success to load pre-trained glove300 model!\n")
 
             # Generate batches
             train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text, train_e1, train_e2)),
