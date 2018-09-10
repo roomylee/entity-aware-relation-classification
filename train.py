@@ -20,9 +20,9 @@ FLAGS = configure.parse_args()
 
 def train():
     with tf.device('/cpu:0'):
-        train_text, train_e1, train_e2, train_y = data_helpers.load_data_and_labels(FLAGS.train_path)
+        train_text, train_y, train_e1, train_e2, train_dist1, train_dist2 = data_helpers.load_data_and_labels(FLAGS.train_path)
     with tf.device('/cpu:0'):
-        test_text, test_e1, test_e2, test_y = data_helpers.load_data_and_labels(FLAGS.test_path)
+        test_text, test_y, test_e1, test_e2, test_dist1, test_dist2 = data_helpers.load_data_and_labels(FLAGS.test_path)
 
     # Build vocabulary
     # Example: x_text[3] = "A misty <e1>ridge</e1> uprises from the <e2>surge</e2>."
@@ -43,6 +43,19 @@ def train():
     print("test_y = {0}".format(test_y.shape))
     print("")
 
+    # Example: pos1[3] = [-2 -1  0  1  2   3   4 999 999 999 ... 999]
+    # [95 96 97 98 99 100 101 999 999 999 ... 999]
+    # =>
+    # [11 12 13 14 15  16  21  17  17  17 ...  17]
+    # dimension = MAX_SENTENCE_LENGTH
+    dist_vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
+    dist_vocab_processor.fit(train_dist1 + train_dist2)
+    train_d1 = np.array(list(dist_vocab_processor.transform(train_dist1)))
+    train_d2 = np.array(list(dist_vocab_processor.transform(train_dist2)))
+    test_d1 = np.array(list(dist_vocab_processor.transform(test_dist1)))
+    test_d2 = np.array(list(dist_vocab_processor.transform(test_dist2)))
+    print("Position Vocabulary Size: {:d}".format(len(dist_vocab_processor.vocabulary_)))
+
     with tf.Graph().as_default():
         session_conf = tf.ConfigProto(
             allow_soft_placement=FLAGS.allow_soft_placement,
@@ -55,6 +68,8 @@ def train():
                 num_classes=train_y.shape[1],
                 vocab_size=len(vocab_processor.vocabulary_),
                 embedding_size=FLAGS.embedding_size,
+                dist_vocab_size=len(dist_vocab_processor.vocabulary_),
+                dist_embedding_size=FLAGS.dist_embedding_size,
                 hidden_size=FLAGS.hidden_size,
                 attention_size=FLAGS.attention_size,
                 use_elmo=(FLAGS.embeddings == 'elmo'),
@@ -67,7 +82,7 @@ def train():
             # Output directory for models and summaries
             timestamp = str(int(time.time()))
             out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
-            print("Writing to {}\n".format(out_dir))
+            print("\nWriting to {}\n".format(out_dir))
 
             # Summaries for loss and accuracy
             loss_summary = tf.summary.scalar("loss", model.loss)
@@ -111,18 +126,21 @@ def train():
                 print("Success to load pre-trained glove300 model!\n")
 
             # Generate batches
-            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text, train_e1, train_e2)),
+            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text,
+                                                             train_e1, train_e2, train_d1, train_d2)),
                                               FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
             best_f1 = 0.0  # For save checkpoint(model)
             for train_batch in train_batches:
-                train_bx, train_by, train_btxt, train_be1, train_be2 = zip(*train_batch)
+                train_bx, train_by, train_btxt, train_be1, train_be2, train_bd1, train_bd2 = zip(*train_batch)
                 feed_dict = {
                     model.input_x: train_bx,
                     model.input_y: train_by,
+                    model.input_text: train_btxt,
                     model.input_e1: train_be1,
                     model.input_e2: train_be2,
-                    model.input_text: train_btxt,
+                    model.input_d1: train_bd1,
+                    model.input_d2: train_bd2,
                     model.rnn_dropout_keep_prob: FLAGS.rnn_dropout_keep_prob,
                     model.dropout_keep_prob: FLAGS.dropout_keep_prob
                 }
@@ -139,20 +157,23 @@ def train():
                 if step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
                     # Generate batches
-                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text, test_e1, test_e2)),
+                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text,
+                                                                    test_e1, test_e2, test_d1, test_d2)),
                                                            FLAGS.batch_size, 1, shuffle=False)
                     # Training loop. For each batch...
                     losses = 0.0
                     accuracy = 0.0
                     predictions = []
                     for test_batch in test_batches:
-                        test_bx, test_by, test_btxt, test_be1, test_be2 = zip(*test_batch)
+                        test_bx, test_by, test_btxt, test_be1, test_be2, test_bd1, test_bd2 = zip(*test_batch)
                         feed_dict = {
                             model.input_x: test_bx,
                             model.input_y: test_by,
+                            model.input_text: test_btxt,
                             model.input_e1: test_be1,
                             model.input_e2: test_be2,
-                            model.input_text: test_btxt,
+                            model.input_d1: test_bd1,
+                            model.input_d2: test_bd2,
                             model.rnn_dropout_keep_prob: 1.0,
                             model.dropout_keep_prob: 1.0
                         }

@@ -47,6 +47,9 @@ def load_data_and_labels(path):
         data.append([id, sentence, e1, e2, relation])
 
     df = pd.DataFrame(data=data, columns=["id", "sentence", "e1", "e2", "relation"])
+
+    dist1, dist2 = get_relative_distance(df)
+
     labelsMapping = {'Other': 0,
                      'Message-Topic(e1,e2)': 1, 'Message-Topic(e2,e1)': 2,
                      'Product-Producer(e1,e2)': 3, 'Product-Producer(e2,e1)': 4,
@@ -84,7 +87,31 @@ def load_data_and_labels(path):
     labels = dense_to_one_hot(labels_flat, labels_count)
     labels = labels.astype(np.uint8)
 
-    return x_text, e1, e2, labels
+    return x_text, labels, e1, e2, dist1, dist2
+
+
+def get_relative_distance(df, max_sentence_length=102):
+    # Position data
+    pos1 = []
+    pos2 = []
+    for df_idx in range(len(df)):
+        sentence = df.iloc[df_idx]['sentence']
+        tokens = nltk.word_tokenize(sentence)
+        e1 = df.iloc[df_idx]['e1']
+        e2 = df.iloc[df_idx]['e2']
+
+        d1 = ""
+        d2 = ""
+        for word_idx in range(len(tokens)):
+            d1 += str((max_sentence_length - 1) + word_idx - e1) + " "
+            d2 += str((max_sentence_length - 1) + word_idx - e2) + " "
+        for _ in range(max_sentence_length - len(tokens)):
+            d1 += "999 "
+            d2 += "999 "
+        pos1.append(d1)
+        pos2.append(d2)
+
+    return pos1, pos2
 
 
 def batch_iter(data, batch_size, num_epochs, shuffle=True):

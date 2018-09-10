@@ -21,6 +21,8 @@ def parse_args():
                         type=str, help="Embeddings {'word2vec', 'glove100', 'glove300', 'elmo'}")
     parser.add_argument("--embedding_size", default=300,
                         type=int, help="Dimensionality of character embedding (default: 300)")
+    parser.add_argument("--dist_embedding_size", default=50,
+                        type=int, help="Dimensionality of relative distance embedding (default: 300)")
     parser.add_argument("--hidden_size", default=512,
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
     parser.add_argument("--attention_size", default=50,
@@ -29,7 +31,7 @@ def parse_args():
                         type=float, help="Dropout keep probability of RNN (default: 0.8)")
     parser.add_argument("--dropout_keep_prob", default=0.5,
                         type=float, help="Dropout keep probability of output layer (default: 0.5)")
-    parser.add_argument("--l2_reg_lambda", default=0.0001,
+    parser.add_argument("--l2_reg_lambda", default=0.0,
                         type=float, help="L2 regularization lambda (default: 0.0)")
 
     # Training parameters
@@ -62,8 +64,8 @@ def parse_args():
     parser.add_argument("--gpu_allow_growth", default=True,
                         type=bool, help="Allow gpu memory growth")
 
+    parser.print_help()
     if len(sys.argv) == 0:
-        parser.print_help()
         sys.exit(1)
 
     args = parser.parse_args()

@@ -4,7 +4,7 @@ from model.attention import *
 
 
 class SelfAttentiveLSTM:
-    def __init__(self, sequence_length, num_classes, vocab_size, embedding_size,
+    def __init__(self, sequence_length, num_classes, vocab_size, embedding_size, dist_vocab_size, dist_embedding_size,
                  hidden_size, attention_size, use_elmo=False, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_x')
@@ -12,6 +12,8 @@ class SelfAttentiveLSTM:
         self.input_text = tf.placeholder(tf.string, shape=[None, ], name='input_text')
         self.input_e1 = tf.placeholder(tf.int32, shape=[None, ], name='input_e1')
         self.input_e2 = tf.placeholder(tf.int32, shape=[None, ], name='input_e2')
+        self.input_d1 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_d1')
+        self.input_d2 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_d2')
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
 
@@ -25,16 +27,20 @@ class SelfAttentiveLSTM:
         else:
             # Embedding layer
             with tf.device('/cpu:0'), tf.variable_scope("word-embeddings"):
-                self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0), name="W_text")
+                self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -0.25, 0.25), name="W_text")
                 self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
 
-        with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
-            self.W_dist = tf.Variable(tf.random_uniform([clip_k*2+3, 100], -1.0, 1.0), name="W_dist")
-            self.a1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
-            self.a2 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
+        # with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
+        #     self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
+        #     self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
+        #     self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)
+        #
+        # self.embedded_x = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
 
         with tf.variable_scope("self-attention"):
-            self.entity_att = multihead_attention(self.embedded_chars, self.embedded_chars)
+            self.entity_att = multihead_attention(self.embedded_chars, self.embedded_chars,
+                                                  num_units=embedding_size,
+                                                  num_heads=4)
 
         with tf.variable_scope("bi-rnn"):
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(tf.nn.rnn_cell.BasicLSTMCell(hidden_size),
@@ -57,14 +63,12 @@ class SelfAttentiveLSTM:
 
         # Fully connected layer
         with tf.variable_scope('output'):
-            W = tf.get_variable("W", shape=[hidden_size*2, num_classes], initializer=initializer)
-            b = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b")
-            self.logits = tf.nn.xw_plus_b(self.h_drop, W, b, name="logits")
+            self.logits = tf.layers.dense(self.h_drop, num_classes, kernel_initializer=initializer)
             self.predictions = tf.argmax(self.logits, 1, name="predictions")
 
         # Calculate mean cross-entropy loss
         with tf.variable_scope("loss"):
-            losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.input_y)
+            losses = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.logits, labels=self.input_y)
             self.l2 = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables()])
             self.loss = tf.reduce_mean(losses) + l2_reg_lambda * self.l2
 

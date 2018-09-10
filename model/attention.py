@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 
 def attention(inputs, attention_size, time_major=False, return_alphas=False):
@@ -90,7 +91,7 @@ def dot_self_attention(x, scale_factor=0.05):
 def add_self_attention(x):
     x1 = tf.layers.dense(x, 102)
     x2 = tf.layers.dense(x, 102)
-    e = tf.layers.dense(tf.tanh(x1+x2), 102)
+    e = tf.layers.dense(tf.tanh(x1 + x2), 102)
     att = tf.nn.softmax(e)
     output = tf.matmul(att, x)
     return output
@@ -113,8 +114,8 @@ def input_attention(x, e1, e2):
 
 def multihead_attention(queries,
                         keys,
-                        num_units=None,
-                        num_heads=4,
+                        num_units,
+                        num_heads,
                         dropout_rate=0,
                         is_training=True,
                         causality=False,
@@ -138,14 +139,13 @@ def multihead_attention(queries,
       A 3d tensor with shape of (N, T_q, C)
     '''
     with tf.variable_scope(scope, reuse=reuse):
-        # Set the fall back option for num_units
-        if num_units is None:
-            num_units = queries.get_shape()[-1]
-
         # Linear projections
-        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu)  # (N, T_q, C)
-        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
-        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu)  # (N, T_k, C)
+        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu,
+                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
+                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
+                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
 
         # Split and concat
         Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
@@ -198,6 +198,42 @@ def multihead_attention(queries,
 
         # Normalize
         outputs = normalize(outputs)  # (N, T_q, C)
+
+    return outputs
+
+
+def feedforward(inputs,
+                num_units=[150, 300],
+                scope="multihead_attention",
+                reuse=None):
+    '''Point-wise feed forward net.
+
+    Args:
+      inputs: A 3d tensor with shape of [N, T, C].
+      num_units: A list of two integers.
+      scope: Optional scope for `variable_scope`.
+      reuse: Boolean, whether to reuse the weights of a previous layer
+        by the same name.
+
+    Returns:
+      A 3d tensor with the same shape and dtype as inputs
+    '''
+    with tf.variable_scope(scope, reuse=reuse):
+        # Inner layer
+        params = {"inputs": inputs, "filters": num_units[0], "kernel_size": 1,
+                  "activation": tf.nn.relu, "use_bias": True}
+        outputs = tf.layers.conv1d(**params)
+
+        # Readout layer
+        params = {"inputs": outputs, "filters": num_units[1], "kernel_size": 1,
+                  "activation": None, "use_bias": True}
+        outputs = tf.layers.conv1d(**params)
+
+        # Residual connection
+        outputs += inputs
+
+        # Normalize
+        outputs = normalize(outputs)
 
     return outputs
 
