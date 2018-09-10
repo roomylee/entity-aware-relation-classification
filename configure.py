@@ -71,7 +71,7 @@ def parse_args():
     print("")
     args = parser.parse_args()
     for arg in vars(args):
-        print("{}={}".format(arg, getattr(args, arg)))
+        print("{}={}".format(arg.upper(), getattr(args, arg)))
     print("")
 
     return args
