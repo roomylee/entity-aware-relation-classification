@@ -6,16 +6,13 @@ import tensorflow as tf
 from sklearn.metrics import f1_score
 
 import data_helpers
-import configure
+from configure import FLAGS
 from model.self_att_lstm import SelfAttentiveLSTM
 import utils
 
 import warnings
 import sklearn.exceptions
 warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
-
-
-FLAGS = configure.parse_args()
 
 
 def train():

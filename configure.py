@@ -75,3 +75,5 @@ def parse_args():
     print("")
 
     return args
+
+FLAGS = parse_args()
