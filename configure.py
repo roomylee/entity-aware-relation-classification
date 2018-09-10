@@ -27,16 +27,16 @@ def parse_args():
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
     parser.add_argument("--attention_size", default=50,
                         type=int, help="Dimensionality of attention (default: 50)")
-    parser.add_argument("--rnn_dropout_keep_prob", default=0.8,
-                        type=float, help="Dropout keep probability of RNN (default: 0.8)")
+    parser.add_argument("--rnn_dropout_keep_prob", default=0.9,
+                        type=float, help="Dropout keep probability of RNN (default: 0.9)")
     parser.add_argument("--dropout_keep_prob", default=0.5,
                         type=float, help="Dropout keep probability of output layer (default: 0.5)")
     parser.add_argument("--l2_reg_lambda", default=0.0,
                         type=float, help="L2 regularization lambda (default: 0.0)")
 
     # Training parameters
-    parser.add_argument("--batch_size", default=16,
-                        type=int, help="Batch Size (default: 16)")
+    parser.add_argument("--batch_size", default=20,
+                        type=int, help="Batch Size (default: 20)")
     parser.add_argument("--num_epochs", default=100,
                         type=int, help="Number of training epochs (Default: 100)")
     parser.add_argument("--display_every", default=10,
@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("--evaluate_every", default=100,
                         type=int, help="Evaluate model on dev set after this many steps (default: 100)")
     parser.add_argument("--num_checkpoints", default=10,
-                        type=int, help="Number of checkpoints to store (default: 5)")
+                        type=int, help="Number of checkpoints to store (default: 10)")
     parser.add_argument("--learning_rate", default=1e-3,
                         type=float, help="Which learning rate to start with (Default: 1e-3)")
 
