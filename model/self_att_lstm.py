@@ -20,6 +20,7 @@ class SelfAttentiveLSTM:
 
         initializer = tf.contrib.layers.xavier_initializer()
         text_length = self._length(self.input_x)
+        batch_size = tf.shape(self.input_x)[0]
 
         if use_elmo:
             with tf.variable_scope("elmo-embeddings"):
@@ -30,6 +31,8 @@ class SelfAttentiveLSTM:
             with tf.device('/cpu:0'), tf.variable_scope("word-embeddings"):
                 self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -0.25, 0.25), name="W_text")
                 self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
+                self.emb_e1 = tf.nn.embedding_lookup(self.W_text, self.input_e1)
+                self.emb_e2 = tf.nn.embedding_lookup(self.W_text, self.input_e2)
 
         # with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
         #     self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
@@ -44,14 +47,18 @@ class SelfAttentiveLSTM:
                                                   num_heads=4)
 
         with tf.variable_scope("bi-rnn"):
-            fw_cell = tf.nn.rnn_cell.DropoutWrapper(tf.nn.rnn_cell.BasicLSTMCell(hidden_size),
-                                                    self.rnn_dropout_keep_prob)
-            bw_cell = tf.nn.rnn_cell.DropoutWrapper(tf.nn.rnn_cell.BasicLSTMCell(hidden_size),
-                                                    self.rnn_dropout_keep_prob)
+            _fw_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size)
+            fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
+            fw_init = _fw_cell.zero_state(batch_size, tf.float32)
+            _bw_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size)
+            bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
+            bw_init = _bw_cell.zero_state(batch_size, tf.float32)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                                   cell_bw=bw_cell,
                                                                   inputs=self.entity_att,
                                                                   sequence_length=text_length,
+                                                                  initial_state_fw=fw_init,
+                                                                  initial_state_bw=bw_init,
                                                                   dtype=tf.float32)
 
         # Attention layer
@@ -102,7 +109,7 @@ class SelfAttentiveLSTM:
         def loop_body(i, L):
             pos_label = labels[i]  # positive class label index
             # taking most informative negative class, use 2nd argmax
-            _, neg_indices = tf.nn.top_k(s[i], k=2)
+            _, neg_indices = tf.nn.top_k(logits[i], k=2)
             max_neg_index = tf.cond(tf.equal(pos_label, neg_indices[0]),
                                     lambda: neg_indices[1], lambda: neg_indices[0])
 
