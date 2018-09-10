@@ -64,9 +64,14 @@ def parse_args():
     parser.add_argument("--gpu_allow_growth", default=True,
                         type=bool, help="Allow gpu memory growth")
 
-    parser.print_help()
     if len(sys.argv) == 0:
+        parser.print_help()
         sys.exit(1)
 
+    print("")
     args = parser.parse_args()
+    for arg in vars(args):
+        print("{}={}".format(arg, getattr(args, arg)))
+    print("")
+
     return args
