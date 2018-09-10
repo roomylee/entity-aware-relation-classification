@@ -4,6 +4,7 @@ import time
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import f1_score
+import subprocess
 
 import data_helpers
 from configure import FLAGS
@@ -198,6 +199,13 @@ def train():
                         output_path = FLAGS.output_path[:-4]+"-{:.3g}-{}".format(f1, step)+".txt"
                         utils.save_result(predictions, os.path.join(out_dir, output_path))
                         print("Saved model checkpoint to {}\n".format(path))
+
+                        perl_path = os.path.join(os.path.curdir, "SemEval2010_task8_all_data",
+                                                 "SemEval2010_task8_scorer-v1.2", "semeval2010_task8_scorer-v1.2.pl")
+                        pfile = os.path.join(out_dir, output_path)
+                        tfile = " resource/target.txt"
+                        subprocess.call(["perl", perl_path, pfile, tfile])
+                        print("")
 
 
 def main(_):
