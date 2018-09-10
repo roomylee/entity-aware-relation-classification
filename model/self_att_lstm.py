@@ -47,10 +47,10 @@ class SelfAttentiveLSTM:
                                                   num_heads=4)
 
         with tf.variable_scope("bi-rnn"):
-            _fw_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size)
+            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
             fw_init = _fw_cell.zero_state(batch_size, tf.float32)
-            _bw_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size)
+            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
             bw_init = _bw_cell.zero_state(batch_size, tf.float32)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
@@ -69,9 +69,14 @@ class SelfAttentiveLSTM:
         with tf.variable_scope('dropout'):
             self.h_drop = tf.nn.dropout(self.att_output, self.dropout_keep_prob)
 
+        with tf.variable_scope('concat'):
+            E = tf.layers.dense(tf.concat([self.emb_e1, self.emb_e2], axis=-1), 512,
+                                activation=tf.tanh, kernel_initializer=initializer)
+            self.concat_output = tf.concat([self.h_drop, E], axis=-1)
+
         # Fully connected layer
         with tf.variable_scope('output'):
-            self.logits = tf.layers.dense(self.h_drop, num_classes, kernel_initializer=initializer)
+            self.logits = tf.layers.dense(self.concat_output, num_classes, kernel_initializer=initializer)
             self.predictions = tf.argmax(self.logits, 1, name="predictions")
 
         # Calculate mean cross-entropy loss

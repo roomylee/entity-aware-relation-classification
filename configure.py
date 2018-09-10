@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--embedding_size", default=300,
                         type=int, help="Dimensionality of character embedding (default: 300)")
     parser.add_argument("--dist_embedding_size", default=50,
-                        type=int, help="Dimensionality of relative distance embedding (default: 300)")
+                        type=int, help="Dimensionality of relative distance embedding (default: 50)")
     parser.add_argument("--hidden_size", default=512,
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
     parser.add_argument("--attention_size", default=50,
@@ -37,8 +37,8 @@ def parse_args():
     # Training parameters
     parser.add_argument("--batch_size", default=20,
                         type=int, help="Batch Size (default: 20)")
-    parser.add_argument("--num_epochs", default=100,
-                        type=int, help="Number of training epochs (Default: 100)")
+    parser.add_argument("--num_epochs", default=10,
+                        type=int, help="Number of training epochs (Default: 10)")
     parser.add_argument("--display_every", default=10,
                         type=int, help="Number of iterations to display training information")
     parser.add_argument("--evaluate_every", default=100,
