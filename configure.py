@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument("--attention_size", default=50,
                         type=int, help="Dimensionality of attention (default: 50)")
     # Misc
+    parser.add_argument("--desc", default="",
+                        type=str, help="Description for model")
     parser.add_argument("--dropout_keep_prob", default=0.5,
                         type=float, help="Dropout keep probability of output layer (default: 0.5)")
     parser.add_argument("--l2_reg_lambda", default=0.0,
@@ -51,14 +53,6 @@ def parse_args():
                         type=int, help="Number of checkpoints to store (default: 10)")
     parser.add_argument("--learning_rate", default=1e-3,
                         type=float, help="Which learning rate to start with (Default: 1e-3)")
-
-    # Testing Parameters
-    parser.add_argument("--checkpoint_dir", default="",
-                        type=str, help="Checkpoint directory from training run")
-    parser.add_argument("--output_path", default="result/output.txt",
-                        type=str, help="Path of prediction for evaluation data")
-    parser.add_argument("--target_path", default="result/target.txt",
-                        type=str, help="Path of target(answer) file for evaluation data")
 
     # Misc Parameters
     parser.add_argument("--allow_soft_placement", default=True,

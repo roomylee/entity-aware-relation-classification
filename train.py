@@ -8,6 +8,7 @@ import subprocess
 
 import data_helpers
 from configure import FLAGS
+from logger import Logger
 from model.self_att_lstm import SelfAttentiveLSTM
 import utils
 
@@ -34,12 +35,11 @@ def train():
     test_x = np.array(list(vocab_processor.transform(test_text)))
     train_text = np.array(train_text)
     test_text = np.array(test_text)
-    print("Text Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
+    print("\nText Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
     print("train_x = {0}".format(train_x.shape))
     print("train_y = {0}".format(train_y.shape))
     print("test_x = {0}".format(test_x.shape))
     print("test_y = {0}".format(test_y.shape))
-    print("")
 
     # Example: pos1[3] = [-2 -1  0  1  2   3   4 999 999 999 ... 999]
     # [95 96 97 98 99 100 101 999 999 999 ... 999]
@@ -52,7 +52,10 @@ def train():
     train_d2 = np.array(list(dist_vocab_processor.transform(train_dist2)))
     test_d1 = np.array(list(dist_vocab_processor.transform(test_dist1)))
     test_d2 = np.array(list(dist_vocab_processor.transform(test_dist2)))
-    print("Position Vocabulary Size: {:d}".format(len(dist_vocab_processor.vocabulary_)))
+    print("\nPosition Vocabulary Size: {:d}".format(len(dist_vocab_processor.vocabulary_)))
+    print("train_d1 = {0}".format(train_d1.shape))
+    print("test_d1 = {0}".format(test_d1.shape))
+    print("")
 
     with tf.Graph().as_default():
         session_conf = tf.ConfigProto(
@@ -75,26 +78,16 @@ def train():
 
             # Define Training procedure
             global_step = tf.Variable(0, name="global_step", trainable=False)
-            train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
+            # train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
+            train_op = tf.train.AdadeltaOptimizer(FLAGS.learning_rate, epsilon=1e-6).minimize(model.loss, global_step=global_step)
 
             # Output directory for models and summaries
             timestamp = str(int(time.time()))
             out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
             print("\nWriting to {}\n".format(out_dir))
 
-            # Summaries for loss and accuracy
-            loss_summary = tf.summary.scalar("loss", model.loss)
-            acc_summary = tf.summary.scalar("accuracy", model.accuracy)
-
-            # Train Summaries
-            train_summary_op = tf.summary.merge([loss_summary, acc_summary])
-            train_summary_dir = os.path.join(out_dir, "summaries", "train")
-            train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
-
-            # Dev summaries
-            test_summary_op = tf.summary.merge([loss_summary, acc_summary])
-            test_summary_dir = os.path.join(out_dir, "summaries", "dev")
-            test_summary_writer = tf.summary.FileWriter(test_summary_dir, sess.graph)
+            # Logger
+            logger = Logger(out_dir)
 
             # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
             checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
@@ -105,7 +98,6 @@ def train():
 
             # Write vocabulary
             vocab_processor.save(os.path.join(out_dir, "vocab"))
-            utils.save_result(np.argmax(test_y, axis=1), os.path.join(out_dir, FLAGS.target_path), mkdir=True)
 
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
@@ -126,7 +118,7 @@ def train():
             # Generate batches
             train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text,
                                                              train_e1, train_e2, train_d1, train_d2)),
-                                              FLAGS.batch_size, FLAGS.num_epochs)
+                                                    FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
             best_f1 = 0.0  # For save checkpoint(model)
             for train_batch in train_batches:
@@ -142,14 +134,12 @@ def train():
                     model.rnn_dropout_keep_prob: FLAGS.rnn_dropout_keep_prob,
                     model.dropout_keep_prob: FLAGS.dropout_keep_prob
                 }
-                _, step, summaries, loss, accuracy = sess.run(
-                    [train_op, global_step, train_summary_op, model.loss, model.accuracy], feed_dict)
-                train_summary_writer.add_summary(summaries, step)
+                _, step, loss, accuracy = sess.run(
+                    [train_op, global_step, model.loss, model.accuracy], feed_dict)
 
                 # Training log display
                 if step % FLAGS.display_every == 0:
-                    time_str = datetime.datetime.now().isoformat()
-                    print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+                    logger.logging_train(step, loss, accuracy)
 
                 # Evaluation
                 if step % FLAGS.evaluate_every == 0:
@@ -162,6 +152,7 @@ def train():
                     losses = 0.0
                     accuracy = 0.0
                     predictions = []
+                    iter_cnt = 0
                     for test_batch in test_batches:
                         test_bx, test_by, test_btxt, test_be1, test_be2, test_bd1, test_bd2 = zip(*test_batch)
                         feed_dict = {
@@ -175,36 +166,23 @@ def train():
                             model.rnn_dropout_keep_prob: 1.0,
                             model.dropout_keep_prob: 1.0
                         }
-                        summaries, loss, acc, pred = sess.run(
-                            [test_summary_op, model.loss, model.accuracy, model.predictions], feed_dict)
-                        test_summary_writer.add_summary(summaries, step)
+                        loss, acc, pred = sess.run(
+                            [model.loss, model.accuracy, model.predictions], feed_dict)
                         losses += loss
                         accuracy += acc
                         predictions += pred.tolist()
-
-                    losses /= int(len(test_y) / FLAGS.batch_size)
-                    accuracy /= int(len(test_y) / FLAGS.batch_size)
+                        iter_cnt += 1
+                    losses /= iter_cnt
+                    accuracy /= iter_cnt
                     predictions = np.array(predictions, dtype='int')
-                    f1 = f1_score(np.argmax(test_y, axis=1), predictions, labels=np.array(range(1, 19)), average="macro")
 
-                    time_str = datetime.datetime.now().isoformat()
-                    print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, losses, accuracy))
-                    print("(2*9+1)-Way Macro-Average F1 Score (excluding Other): {:g}\n".format(f1))
+                    logger.logging_eval(step, loss, accuracy, predictions)
 
                     # Model checkpoint
-                    if best_f1 * 0.98 < f1:
-                        if best_f1 < f1:
-                            best_f1 = f1
-                        path = saver.save(sess, checkpoint_prefix+"-{:.3g}".format(f1), global_step=step)
-                        output_path = FLAGS.output_path[:-4]+"-{:.3g}-{}".format(f1, step)+".txt"
-                        utils.save_result(predictions, os.path.join(out_dir, output_path))
-                        perl_path = os.path.join(os.path.curdir, "SemEval2010_task8_all_data",
-                                                 "SemEval2010_task8_scorer-v1.2", "semeval2010_task8_scorer-v1.2.pl")
-                        pfile = os.path.join(out_dir, output_path)
-                        tfile = " resource/target.txt"
-                        process = subprocess.Popen(["perl", perl_path, pfile, tfile], stdout=subprocess.PIPE)
-                        print(str(process.communicate()[0]).split("\\n")[-2])
-                        print("\nSaved model checkpoint to {}\n".format(path))
+                    if best_f1 < logger.best_f1:
+                        best_f1 = logger.best_f1
+                        path = saver.save(sess, checkpoint_prefix+"-{:.3g}".format(best_f1), global_step=step)
+                        print("Saved model checkpoint to {}\n".format(path))
 
 
 def main(_):

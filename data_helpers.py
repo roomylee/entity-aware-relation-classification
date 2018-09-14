@@ -3,6 +3,7 @@ import pandas as pd
 import nltk
 import re
 
+import utils
 from configure import FLAGS
 
 
@@ -87,23 +88,14 @@ def load_data_and_labels(path):
 
         data.append([id, sentence, e1, e2, relation])
 
-    print("max sentence length = {}".format(max_sentence_length))
+    print(path)
+    print("max sentence length = {}\n".format(max_sentence_length))
 
     df = pd.DataFrame(data=data, columns=["id", "sentence", "e1", "e2", "relation"])
 
     dist1, dist2 = get_relative_distance(df, FLAGS.max_sentence_length)
 
-    labelsMapping = {'Other': 0,
-                     'Message-Topic(e1,e2)': 1, 'Message-Topic(e2,e1)': 2,
-                     'Product-Producer(e1,e2)': 3, 'Product-Producer(e2,e1)': 4,
-                     'Instrument-Agency(e1,e2)': 5, 'Instrument-Agency(e2,e1)': 6,
-                     'Entity-Destination(e1,e2)': 7, 'Entity-Destination(e2,e1)': 8,
-                     'Cause-Effect(e1,e2)': 9, 'Cause-Effect(e2,e1)': 10,
-                     'Component-Whole(e1,e2)': 11, 'Component-Whole(e2,e1)': 12,
-                     'Entity-Origin(e1,e2)': 13, 'Entity-Origin(e2,e1)': 14,
-                     'Member-Collection(e1,e2)': 15, 'Member-Collection(e2,e1)': 16,
-                     'Content-Container(e1,e2)': 17, 'Content-Container(e2,e1)': 18}
-    df['label'] = [labelsMapping[r] for r in df['relation']]
+    df['label'] = [utils.class2label[r] for r in df['relation']]
 
     # Text Data
     x_text = df['sentence'].tolist()
