@@ -3,16 +3,17 @@ import tensorflow_hub as hub
 from model.attention import *
 from configure import FLAGS
 from model.char_cnn import highway_fc_layer, char_cnn
+from tensorflow.python.ops import rnn_cell_impl
+from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 
 
 class SelfAttentiveLSTM:
-    def __init__(self, sequence_length, word_length, num_classes, vocab_size, embedding_size, dist_vocab_size, dist_embedding_size,
-                 char_vocab_size, char_embedding_size, filter_sizes, num_filters,
+    def __init__(self, sequence_length, num_classes,
+                 vocab_size, embedding_size, dist_vocab_size, dist_embedding_size,
                  hidden_size, attention_size, use_elmo=False, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_x')
         self.input_y = tf.placeholder(tf.float32, shape=[None, num_classes], name='input_y')
-        self.input_char = tf.placeholder(tf.int32, shape=[None, sequence_length, word_length], name='input_char')
         self.input_text = tf.placeholder(tf.string, shape=[None, ], name='input_text')
         self.input_e1 = tf.placeholder(tf.int32, shape=[None, ], name='input_e1')
         self.input_e2 = tf.placeholder(tf.int32, shape=[None, ], name='input_e2')
@@ -23,7 +24,6 @@ class SelfAttentiveLSTM:
 
         initializer = tf.contrib.layers.xavier_initializer()
         text_length = self._length(self.input_x)
-        batch_size = tf.shape(self.input_x)[0]
 
         if use_elmo:
             with tf.variable_scope("elmo-embeddings"):
@@ -44,40 +44,20 @@ class SelfAttentiveLSTM:
         #
         # self.embedded_x = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
 
-        # with tf.variable_scope("char-embeddings"):
-        #     self.W_char = tf.get_variable("W_char", [char_vocab_size, char_embedding_size], initializer=initializer)
-        #     self.char_embedded_chars = tf.nn.embedding_lookup(self.W_char, self.input_char)
-        #
-        #     self.char_emb = char_cnn(self.char_embedded_chars,
-        #                              filter_sizes=filter_sizes,
-        #                              num_filters=num_filters,
-        #                              char_embedding_size=char_embedding_size,
-        #                              word_length=word_length,
-        #                              sequence_length=sequence_length)
-        #     num_filters_total = len(filter_sizes)*num_filters
-        #     self.char_emb = highway_fc_layer(self.char_emb, num_filters_total)
-        #
-        # with tf.variable_scope("word-repr"):
-        #     self.word_repr = tf.concat([self.embedded_chars, self.char_emb], axis=-1)
-
         with tf.variable_scope("self-attention"):
             self.entity_att = multihead_attention(self.embedded_chars, self.embedded_chars,
                                                   num_units=embedding_size,
-                                                  num_heads=5)
+                                                  num_heads=4)
 
         with tf.variable_scope("bi-rnn"):
-            _fw_cell = tf.nn.rnn_cell.GRUCell(hidden_size)
+            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
-            fw_init = _fw_cell.zero_state(batch_size, tf.float32)
-            _bw_cell = tf.nn.rnn_cell.GRUCell(hidden_size)
+            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
-            bw_init = _bw_cell.zero_state(batch_size, tf.float32)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                                   cell_bw=bw_cell,
                                                                   inputs=self.entity_att,
                                                                   sequence_length=text_length,
-                                                                  initial_state_fw=fw_init,
-                                                                  initial_state_bw=bw_init,
                                                                   dtype=tf.float32)
 
         # Attention layer
@@ -88,10 +68,8 @@ class SelfAttentiveLSTM:
         with tf.variable_scope('dropout'):
             self.h_drop = tf.nn.dropout(self.att_output, self.dropout_keep_prob)
 
-        # with tf.variable_scope('concat'):
-        #     E = tf.layers.dense(tf.concat([self.emb_e1, self.emb_e2], axis=-1), 100,
-        #                         activation=tf.tanh, kernel_initializer=initializer)
-        #     self.concat_output = tf.concat([self.h_drop, E], axis=-1)
+        with tf.variable_scope('batch-norm'):
+            self.h_drop = tf.layers.batch_normalization(self.h_drop)
 
         # Fully connected layer
         with tf.variable_scope('output'):

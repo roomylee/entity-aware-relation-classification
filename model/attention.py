@@ -166,7 +166,7 @@ def multihead_attention(queries,
         outputs += queries
 
         # Normalize
-        outputs = normalize(outputs)  # (N, T_q, C)
+        outputs = layer_norm(outputs)  # (N, T_q, C)
 
     return outputs
 
@@ -202,15 +202,15 @@ def feedforward(inputs,
         outputs += inputs
 
         # Normalize
-        outputs = normalize(outputs)
+        outputs = layer_norm(outputs)
 
     return outputs
 
 
-def normalize(inputs,
-              epsilon=1e-8,
-              scope="ln",
-              reuse=None):
+def layer_norm(inputs,
+               epsilon=1e-8,
+               scope="ln",
+               reuse=None):
     '''Applies layer normalization.
 
     Args:

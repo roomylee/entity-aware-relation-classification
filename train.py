@@ -18,18 +18,9 @@ warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWar
 
 def train():
     with tf.device('/cpu:0'):
-        train_text, train_char, train_y, train_e1, train_e2, train_dist1, train_dist2 = data_helpers.load_data_and_labels(FLAGS.train_path)
+        train_text, train_y, train_e1, train_e2, train_dist1, train_dist2 = data_helpers.load_data_and_labels(FLAGS.train_path)
     with tf.device('/cpu:0'):
-        test_text, test_char, test_y, test_e1, test_e2, test_dist1, test_dist2 = data_helpers.load_data_and_labels(FLAGS.test_path)
-
-    char_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_word_length)
-    char_processor.fit([w for sent in train_char for w in sent])
-    train_xchar = data_helpers.generate_char_data(train_char, char_processor)
-    test_xchar = data_helpers.generate_char_data(train_char, char_processor)
-    print("Char Vocabulary Size: {:d}".format(len(char_processor.vocabulary_)))
-    print("train_xchar = {0}".format(train_xchar.shape))
-    print("test_xchar = {0}".format(test_xchar.shape))
-    print("")
+        test_text, test_y, test_e1, test_e2, test_dist1, test_dist2 = data_helpers.load_data_and_labels(FLAGS.test_path)
 
     # Build vocabulary
     # Example: x_text[3] = "A misty <e1>ridge</e1> uprises from the <e2>surge</e2>."
@@ -72,16 +63,11 @@ def train():
         with sess.as_default():
             model = SelfAttentiveLSTM(
                 sequence_length=train_x.shape[1],
-                word_length=train_xchar.shape[2],
                 num_classes=train_y.shape[1],
                 vocab_size=len(vocab_processor.vocabulary_),
                 embedding_size=FLAGS.embedding_size,
                 dist_vocab_size=len(dist_vocab_processor.vocabulary_),
                 dist_embedding_size=FLAGS.dist_embedding_size,
-                char_vocab_size=len(char_processor.vocabulary_),
-                char_embedding_size=FLAGS.char_embedding_size,
-                filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
-                num_filters=FLAGS.num_filters,
                 hidden_size=FLAGS.hidden_size,
                 attention_size=FLAGS.attention_size,
                 use_elmo=(FLAGS.embeddings == 'elmo'),
@@ -138,17 +124,16 @@ def train():
                 print("Success to load pre-trained glove300 model!\n")
 
             # Generate batches
-            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_xchar, train_text,
+            train_batches = data_helpers.batch_iter(list(zip(train_x, train_y, train_text,
                                                              train_e1, train_e2, train_d1, train_d2)),
                                               FLAGS.batch_size, FLAGS.num_epochs)
             # Training loop. For each batch...
             best_f1 = 0.0  # For save checkpoint(model)
             for train_batch in train_batches:
-                train_bx, train_by, train_bchar, train_btxt, train_be1, train_be2, train_bd1, train_bd2 = zip(*train_batch)
+                train_bx, train_by, train_btxt, train_be1, train_be2, train_bd1, train_bd2 = zip(*train_batch)
                 feed_dict = {
                     model.input_x: train_bx,
                     model.input_y: train_by,
-                    model.input_char: train_bchar,
                     model.input_text: train_btxt,
                     model.input_e1: train_be1,
                     model.input_e2: train_be2,
@@ -170,7 +155,7 @@ def train():
                 if step % FLAGS.evaluate_every == 0:
                     print("\nEvaluation:")
                     # Generate batches
-                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_xchar, test_text,
+                    test_batches = data_helpers.batch_iter(list(zip(test_x, test_y, test_text,
                                                                     test_e1, test_e2, test_d1, test_d2)),
                                                            FLAGS.batch_size, 1, shuffle=False)
                     # Training loop. For each batch...
@@ -178,11 +163,10 @@ def train():
                     accuracy = 0.0
                     predictions = []
                     for test_batch in test_batches:
-                        test_bx, test_by, test_bchar, test_btxt, test_be1, test_be2, test_bd1, test_bd2 = zip(*test_batch)
+                        test_bx, test_by, test_btxt, test_be1, test_be2, test_bd1, test_bd2 = zip(*test_batch)
                         feed_dict = {
                             model.input_x: test_bx,
                             model.input_y: test_by,
-                            model.input_char: test_bchar,
                             model.input_text: test_btxt,
                             model.input_e1: test_be1,
                             model.input_e2: test_be2,

@@ -66,7 +66,6 @@ def clean_str(text):
 def load_data_and_labels(path):
     data = []
     lines = [line.strip() for line in open(path)]
-    max_word_length = 0
     max_sentence_length = 0
     for idx in range(0, len(lines), 4):
         id = lines[idx].split("\t")[0]
@@ -80,20 +79,15 @@ def load_data_and_labels(path):
 
         sentence = clean_str(sentence)
         tokens = nltk.word_tokenize(sentence)
-        e1 = tokens.index("e12") - 1
-        e2 = tokens.index("e22") - 1
-        chars = []
-        for token in tokens:
-            if max_word_length < len(token):
-                max_word_length = len(token)
-            chars.append(" ".join([char for char in token.lower()]))
         if max_sentence_length < len(tokens):
             max_sentence_length = len(tokens)
+        e1 = tokens.index("e12") - 1
+        e2 = tokens.index("e22") - 1
         sentence = " ".join(tokens)
 
-        data.append([id, sentence, chars, e1, e2, relation])
+        data.append([id, sentence, e1, e2, relation])
 
-    print("max word & sentence length = ({}, {})".format(max_word_length, max_sentence_length))
+    print("max sentence length = {}".format(max_sentence_length))
 
     df = pd.DataFrame(data=data, columns=["id", "sentence", "char", "e1", "e2", "relation"])
 
@@ -113,7 +107,6 @@ def load_data_and_labels(path):
 
     # Text Data
     x_text = df['sentence'].tolist()
-    x_char = df['char'].tolist()
     e1 = df['e1'].tolist()
     e2 = df['e2'].tolist()
 
@@ -137,7 +130,7 @@ def load_data_and_labels(path):
     labels = dense_to_one_hot(labels_flat, labels_count)
     labels = labels.astype(np.uint8)
 
-    return x_text, x_char, labels, e1, e2, dist1, dist2
+    return x_text, labels, e1, e2, dist1, dist2
 
 
 def get_relative_distance(df, max_sentence_length):
