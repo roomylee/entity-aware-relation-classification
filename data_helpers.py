@@ -89,7 +89,7 @@ def load_data_and_labels(path):
 
     print("max sentence length = {}".format(max_sentence_length))
 
-    df = pd.DataFrame(data=data, columns=["id", "sentence", "char", "e1", "e2", "relation"])
+    df = pd.DataFrame(data=data, columns=["id", "sentence", "e1", "e2", "relation"])
 
     dist1, dist2 = get_relative_distance(df, FLAGS.max_sentence_length)
 
