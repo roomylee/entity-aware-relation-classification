@@ -41,8 +41,8 @@ def parse_args():
     # Training parameters
     parser.add_argument("--batch_size", default=20,
                         type=int, help="Batch Size (default: 20)")
-    parser.add_argument("--num_epochs", default=10,
-                        type=int, help="Number of training epochs (Default: 10)")
+    parser.add_argument("--num_epochs", default=100,
+                        type=int, help="Number of training epochs (Default: 100)")
     parser.add_argument("--display_every", default=10,
                         type=int, help="Number of iterations to display training information")
     parser.add_argument("--evaluate_every", default=100,
