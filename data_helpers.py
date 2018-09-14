@@ -3,32 +3,71 @@ import pandas as pd
 import nltk
 import re
 
+from configure import FLAGS
 
-def clean_str(string):
+
+def clean_str(text):
     """
     Tokenization/string cleaning for all datasets except for SST.
     Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
     """
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-    string = re.sub(r"\'s", " \'s", string)
-    string = re.sub(r"\'ve", " have", string)
-    string = re.sub(r"n\'t", " not", string)
-    string = re.sub(r"\'re", " are", string)
-    string = re.sub(r"\'d", " would", string)
-    string = re.sub(r"\'ll", " will", string)
-    string = re.sub(r",", " , ", string)
-    string = re.sub(r"!", " ! ", string)
-    string = re.sub(r"\(", " \( ", string)
-    string = re.sub(r"\)", " \) ", string)
-    string = re.sub(r"\?", " \? ", string)
-    string = re.sub(r"\s{2,}", " ", string)
-    return string.strip().lower()
+    # string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    # string = re.sub(r"\'s", " \'s", string)
+    # string = re.sub(r"\'ve", " have", string)
+    # string = re.sub(r"n\'t", " not", string)
+    # string = re.sub(r"\'re", " are", string)
+    # string = re.sub(r"\'d", " would", string)
+    # string = re.sub(r"\'ll", " will", string)
+    # string = re.sub(r",", " , ", string)
+    # string = re.sub(r"!", " ! ", string)
+    # string = re.sub(r"\(", " \( ", string)
+    # string = re.sub(r"\)", " \) ", string)
+    # string = re.sub(r"\?", " \? ", string)
+    # string = re.sub(r"\s{2,}", " ", string)
+
+    text = text.lower()
+    # Clean the text
+    text = re.sub(r"[^A-Za-z0-9^,!.\/'+-=]", " ", text)
+    text = re.sub(r"what's", "what is ", text)
+    text = re.sub(r"that's", "that is ", text)
+    text = re.sub(r"there's", "there is ", text)
+    text = re.sub(r"it's", "it is ", text)
+    text = re.sub(r"\'s", " ", text)
+    text = re.sub(r"\'ve", " have ", text)
+    text = re.sub(r"can't", "can not ", text)
+    text = re.sub(r"n't", " not ", text)
+    text = re.sub(r"i'm", "i am ", text)
+    text = re.sub(r"\'re", " are ", text)
+    text = re.sub(r"\'d", " would ", text)
+    text = re.sub(r"\'ll", " will ", text)
+    text = re.sub(r",", " ", text)
+    text = re.sub(r"\.", " ", text)
+    text = re.sub(r"!", " ! ", text)
+    text = re.sub(r"\/", " ", text)
+    text = re.sub(r"\^", " ^ ", text)
+    text = re.sub(r"\+", " + ", text)
+    text = re.sub(r"\-", " - ", text)
+    text = re.sub(r"\=", " = ", text)
+    text = re.sub(r"'", " ", text)
+    text = re.sub(r"(\d+)(k)", r"\g<1>000", text)
+    text = re.sub(r":", " : ", text)
+    text = re.sub(r" e g ", " eg ", text)
+    text = re.sub(r" b g ", " bg ", text)
+    text = re.sub(r" u s ", " american ", text)
+    text = re.sub(r"\0s", "0", text)
+    text = re.sub(r" 9 11 ", "911", text)
+    text = re.sub(r"e - mail", "email", text)
+    text = re.sub(r"j k", "jk", text)
+    text = re.sub(r"\s{2,}", " ", text)
+
+    return text.strip()
 
 
 def load_data_and_labels(path):
     data = []
     lines = [line.strip() for line in open(path)]
     max_word_length = 0
+    max_sentence_length = 0
     for idx in range(0, len(lines), 4):
         id = lines[idx].split("\t")[0]
         relation = lines[idx + 1]
@@ -39,22 +78,26 @@ def load_data_and_labels(path):
         sentence = sentence.replace('<e2>', ' _e21_ ')
         sentence = sentence.replace('</e2>', ' _e22_ ')
 
+        sentence = clean_str(sentence)
         tokens = nltk.word_tokenize(sentence)
-        e1 = tokens.index("_e11_") + 1
-        e2 = tokens.index("_e21_") + 1
+        e1 = tokens.index("e12") - 1
+        e2 = tokens.index("e22") - 1
         chars = []
         for token in tokens:
             if max_word_length < len(token):
                 max_word_length = len(token)
             chars.append(" ".join([char for char in token.lower()]))
+        if max_sentence_length < len(tokens):
+            max_sentence_length = len(tokens)
         sentence = " ".join(tokens)
-        sentence = clean_str(sentence)
 
         data.append([id, sentence, chars, e1, e2, relation])
 
+    print("max word & sentence length = ({}, {})".format(max_word_length, max_sentence_length))
+
     df = pd.DataFrame(data=data, columns=["id", "sentence", "char", "e1", "e2", "relation"])
 
-    dist1, dist2 = get_relative_distance(df)
+    dist1, dist2 = get_relative_distance(df, FLAGS.max_sentence_length)
 
     labelsMapping = {'Other': 0,
                      'Message-Topic(e1,e2)': 1, 'Message-Topic(e2,e1)': 2,
@@ -97,17 +140,7 @@ def load_data_and_labels(path):
     return x_text, x_char, labels, e1, e2, dist1, dist2
 
 
-def generate_char_data(raw_data, processor, max_word_length=28, max_sentence_length=102):
-    char_data = []
-    for char in raw_data:
-        char_lv_word = list(processor.transform(char))
-        pad = [np.zeros(max_word_length) for _ in range(max_sentence_length - len(char_lv_word))]
-        char_lv_word += pad
-        char_data.append(char_lv_word)
-    return np.array(char_data)
-
-
-def get_relative_distance(df, max_sentence_length=102):
+def get_relative_distance(df, max_sentence_length):
     # Position data
     pos1 = []
     pos2 = []
