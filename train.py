@@ -1,10 +1,7 @@
-import datetime
 import os
 import time
 import numpy as np
 import tensorflow as tf
-from sklearn.metrics import f1_score
-import subprocess
 
 import data_helpers
 from configure import FLAGS
@@ -78,8 +75,7 @@ def train():
 
             # Define Training procedure
             global_step = tf.Variable(0, name="global_step", trainable=False)
-            # train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
-            train_op = tf.train.AdadeltaOptimizer(FLAGS.learning_rate, epsilon=1e-6).minimize(model.loss, global_step=global_step)
+            train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
 
             # Output directory for models and summaries
             timestamp = str(int(time.time()))
