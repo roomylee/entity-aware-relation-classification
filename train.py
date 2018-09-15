@@ -75,7 +75,8 @@ def train():
 
             # Define Training procedure
             global_step = tf.Variable(0, name="global_step", trainable=False)
-            train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
+            train_op = tf.train.AdadeltaOptimizer(1., 0.95, 1e-6).minimize(model.loss, global_step=global_step)
+            # train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
 
             # Output directory for models and summaries
             timestamp = str(int(time.time()))
