@@ -4,6 +4,7 @@ import datetime
 
 from configure import FLAGS
 import utils
+import re
 
 class Logger:
     def __init__(self, out_dir):
@@ -48,7 +49,10 @@ class Logger:
                                  "semeval2010_task8_scorer-v1.2.pl")
         target_path = " resource/target.txt"
         process = subprocess.Popen(["perl", perl_path, prediction_path, target_path], stdout=subprocess.PIPE)
-        f1_score = float(str(process.communicate()[0]).split("\\n")[-2][-10:-5])
+        str_parse = str(process.communicate()[0]).split("\\n")[-2]
+        idx = str_parse.find('%')
+        f1_score = float(str_parse[idx-5:idx])
+
         self.best_f1 = max(self.best_f1, f1_score)
         f1_log = "<<< (9+1)-WAY EVALUATION TAKING DIRECTIONALITY INTO ACCOUNT -- OFFICIAL >>>:\n" \
                  "macro-averaged F1-score = {:g}%, Best = {:g}%\n".format(f1_score, self.best_f1)

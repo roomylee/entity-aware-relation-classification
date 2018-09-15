@@ -8,24 +8,6 @@ from configure import FLAGS
 
 
 def clean_str(text):
-    """
-    Tokenization/string cleaning for all datasets except for SST.
-    Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
-    """
-    # string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-    # string = re.sub(r"\'s", " \'s", string)
-    # string = re.sub(r"\'ve", " have", string)
-    # string = re.sub(r"n\'t", " not", string)
-    # string = re.sub(r"\'re", " are", string)
-    # string = re.sub(r"\'d", " would", string)
-    # string = re.sub(r"\'ll", " will", string)
-    # string = re.sub(r",", " , ", string)
-    # string = re.sub(r"!", " ! ", string)
-    # string = re.sub(r"\(", " \( ", string)
-    # string = re.sub(r"\)", " \) ", string)
-    # string = re.sub(r"\?", " \? ", string)
-    # string = re.sub(r"\s{2,}", " ", string)
-
     text = text.lower()
     # Clean the text
     text = re.sub(r"[^A-Za-z0-9^,!.\/'+-=]", " ", text)
