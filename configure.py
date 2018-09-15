@@ -27,8 +27,8 @@ def parse_args():
     # RNN
     parser.add_argument("--hidden_size", default=512,
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
-    parser.add_argument("--rnn_dropout_keep_prob", default=0.7,
-                        type=float, help="Dropout keep probability of RNN (default: 0.7)")
+    parser.add_argument("--rnn_dropout_keep_prob", default=0.9,
+                        type=float, help="Dropout keep probability of RNN (default: 0.9)")
     # Attention
     parser.add_argument("--attention_size", default=50,
                         type=int, help="Dimensionality of attention (default: 50)")
@@ -49,8 +49,8 @@ def parse_args():
                         type=int, help="Number of iterations to display training information")
     parser.add_argument("--evaluate_every", default=100,
                         type=int, help="Evaluate model on dev set after this many steps (default: 100)")
-    parser.add_argument("--num_checkpoints", default=10,
-                        type=int, help="Number of checkpoints to store (default: 10)")
+    parser.add_argument("--num_checkpoints", default=5,
+                        type=int, help="Number of checkpoints to store (default: 5)")
     parser.add_argument("--learning_rate", default=1e-3,
                         type=float, help="Which learning rate to start with (Default: 1e-3)")
 
