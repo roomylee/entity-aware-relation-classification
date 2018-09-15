@@ -79,7 +79,26 @@ def attention(inputs, attention_size, time_major=False, return_alphas=False):
         return output
     else:
         return output, alphas
-    
+
+def attention_with_no_size(inputs, time_major=False, return_alphas=False):
+    if time_major:
+        # (T,B,D) => (B,T,D)
+        inputs = tf.array_ops.transpose(inputs, [1, 0, 2])
+
+    batch_size = inputs.shape[0].value
+    hidden_size = inputs.shape[2].value
+    u_omega = tf.Variable(tf.random_normal([hidden_size], stddev=0.1))
+    with tf.name_scope('tan_h'):
+        v = tf.tanh(inputs)
+
+    vu = tf.tensordot(v, u_omega, axes=1, name='vu')
+    alphas = tf.nn.softmax(vu, name='alphas')
+    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
+
+    if not return_alphas:
+        return output
+    else:
+        return output, alphas
 
 def multihead_attention(queries,
                         keys,

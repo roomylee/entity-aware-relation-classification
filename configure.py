@@ -25,9 +25,9 @@ def parse_args():
     parser.add_argument("--dist_embedding_size", default=50,
                         type=int, help="Dimensionality of relative distance embedding (default: 50)")
     # RNN
-    parser.add_argument("--hidden_size", default=512,
+    parser.add_argument("--hidden_size", default=300,
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
-    parser.add_argument("--rnn_dropout_keep_prob", default=0.9,
+    parser.add_argument("--rnn_dropout_keep_prob", default=0.7,
                         type=float, help="Dropout keep probability of RNN (default: 0.9)")
     # Attention
     parser.add_argument("--attention_size", default=50,
@@ -37,7 +37,7 @@ def parse_args():
                         type=str, help="Description for model")
     parser.add_argument("--dropout_keep_prob", default=0.5,
                         type=float, help="Dropout keep probability of output layer (default: 0.5)")
-    parser.add_argument("--l2_reg_lambda", default=0.0,
+    parser.add_argument("--l2_reg_lambda", default=0.00001,
                         type=float, help="L2 regularization lambda (default: 0.0)")
 
     # Training parameters

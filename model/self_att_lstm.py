@@ -2,7 +2,6 @@ import tensorflow as tf
 import tensorflow_hub as hub
 from model.attention import *
 from configure import FLAGS
-from model.char_cnn import highway_fc_layer, char_cnn
 from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.contrib.rnn.python.ops import core_rnn_cell
 
@@ -44,6 +43,9 @@ class SelfAttentiveLSTM:
         #
         # self.embedded_x = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
 
+        with tf.variable_scope('drop-out-after-embeddings'):
+            self.embedded_chars = tf.nn.dropout(self.embedded_chars,  self.rnn_dropout_keep_prob)
+
         with tf.variable_scope("self-attention"):
             self.entity_att = multihead_attention(self.embedded_chars, self.embedded_chars,
                                                   num_units=embedding_size,
@@ -61,8 +63,12 @@ class SelfAttentiveLSTM:
                                                                   dtype=tf.float32)
 
         # Attention layer
-        with tf.variable_scope('attention'):
-            self.att_output, self.alphas = attention(self.rnn_outputs, attention_size, return_alphas=True)
+        # with tf.variable_scope('attention'):
+        #     self.att_output, self.alphas = attention(self.rnn_outputs, attention_size, return_alphas=True)
+
+        with tf.variable_scope('attention-with-no-size'):
+            self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
+            self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs, return_alphas=True)
 
         # Dropout
         with tf.variable_scope('dropout'):
