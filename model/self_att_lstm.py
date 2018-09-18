@@ -1,9 +1,7 @@
 import tensorflow as tf
 import tensorflow_hub as hub
-from model.attention import *
-from configure import FLAGS
-from tensorflow.python.ops import rnn_cell_impl
-from tensorflow.contrib.rnn.python.ops import core_rnn_cell
+from model.attention import attention, attention_with_no_size, multihead_attention, entity_attention, \
+    relative_multihead_attention
 
 
 class SelfAttentiveLSTM:
@@ -33,8 +31,6 @@ class SelfAttentiveLSTM:
             with tf.device('/cpu:0'), tf.variable_scope("word-embeddings"):
                 self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -0.25, 0.25), name="W_text")
                 self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
-                # self.emb_e1 = tf.nn.embedding_lookup(self.W_text, self.input_e1)
-                # self.emb_e2 = tf.nn.embedding_lookup(self.W_text, self.input_e2)
 
         # with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
         #     self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
@@ -47,9 +43,15 @@ class SelfAttentiveLSTM:
             self.embedded_chars = tf.nn.dropout(self.embedded_chars,  self.rnn_dropout_keep_prob)
 
         with tf.variable_scope("self-attention"):
-            self.entity_att = multihead_attention(self.embedded_chars, self.embedded_chars,
-                                                  num_units=embedding_size,
-                                                  num_heads=4)
+            self.self_att = relative_multihead_attention(self.embedded_chars, self.embedded_chars,
+                                                         num_units=embedding_size, num_heads=4,
+                                                         clip_k=4, seq_len=sequence_length,
+                                                         dropout_rate=0.1)
+
+        with tf.variable_scope("entity-attention"):
+            self.entity_att = entity_attention(self.embedded_chars, self.input_e1, self.input_e2,
+                                               attention_size=attention_size*6)
+            self.concat_att = tf.concat([self.self_att, self.entity_att], axis=-1)
 
         with tf.variable_scope("bi-rnn"):
             _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
@@ -63,12 +65,11 @@ class SelfAttentiveLSTM:
                                                                   dtype=tf.float32)
 
         # Attention layer
-        # with tf.variable_scope('attention'):
-        #     self.att_output, self.alphas = attention(self.rnn_outputs, attention_size, return_alphas=True)
-
-        with tf.variable_scope('attention-with-no-size'):
-            self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
-            self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs, return_alphas=True)
+        with tf.variable_scope('attention'):
+            self.att_output, self.alphas = attention(self.rnn_outputs, attention_size, return_alphas=True)
+        # with tf.variable_scope('attention-with-no-size'):
+        #     self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
+        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs, return_alphas=True)
 
         # Dropout
         with tf.variable_scope('dropout'):

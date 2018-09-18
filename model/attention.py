@@ -100,6 +100,33 @@ def attention_with_no_size(inputs, time_major=False, return_alphas=False):
     else:
         return output, alphas
 
+
+def entity_attention(inputs, e1, e2, attention_size):
+    attn = tf.layers.dense(inputs, attention_size, activation=tf.nn.relu,
+                           kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
+
+    e1_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e1)[0]), axis=-1), tf.expand_dims(e1, axis=-1)], axis=-1)
+    e1_h = tf.gather_nd(attn, e1_idx)
+    e2_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e2)[0]), axis=-1), tf.expand_dims(e2, axis=-1)], axis=-1)
+    e2_h = tf.gather_nd(attn, e2_idx)
+
+    e1_expand = tf.expand_dims(e1_h, axis=-1)
+    e2_expand = tf.expand_dims(e2_h, axis=-1)
+    e = tf.concat([e1_expand, e2_expand], axis=-1)
+
+    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
+    ve = tf.matmul(attn, e, name='ve')  # (B,T,2) shape
+    alphas = tf.nn.softmax(ve, name='alphas')  # (B,T,2) shape
+
+    # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
+    output = tf.matmul(alphas, tf.transpose(e, [0, 2, 1]))
+
+    # Normalize
+    output = layer_norm(output)  # (N, T_q, C)
+
+    return output
+
+
 def multihead_attention(queries,
                         keys,
                         num_units,
@@ -177,6 +204,126 @@ def multihead_attention(queries,
 
         # Weighted sum
         outputs = tf.matmul(outputs, V_)  # ( h*N, T_q, C/h)
+
+        # Restore shape
+        outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
+
+        # Residual connection
+        outputs += queries
+
+        # Normalize
+        outputs = layer_norm(outputs)  # (N, T_q, C)
+
+    return outputs
+
+
+def relative_multihead_attention(queries,
+                                 keys,
+                                 num_units,
+                                 num_heads,
+                                 clip_k,
+                                 seq_len,
+                                 dropout_rate=0,
+                                 is_training=True,
+                                 causality=False,
+                                 scope="relative_multihead_attention",
+                                 reuse=None):
+    '''Applies multihead attention.
+
+    Args:
+      queries: A 3d tensor with shape of [N, T_q, C_q].
+      keys: A 3d tensor with shape of [N, T_k, C_k].
+      num_units: A scalar. Attention size.
+      dropout_rate: A floating point number.
+      is_training: Boolean. Controller of mechanism for dropout.
+      causality: Boolean. If true, units that reference the future are masked.
+      num_heads: An int. Number of heads.
+      scope: Optional scope for `variable_scope`.
+      reuse: Boolean, whether to reuse the weights of a previous layer
+        by the same name.
+
+    Returns
+      A 3d tensor with shape of (N, T_q, C)
+    '''
+    with tf.variable_scope(scope, reuse=reuse):
+        # Linear projections
+        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu,
+                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
+                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
+                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
+
+        # Split and concat
+        Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
+        K_ = tf.concat(tf.split(K, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
+        V_ = tf.concat(tf.split(V, num_heads, axis=2), axis=0)  # (h*N, T_k, C/h)
+
+        def shift(arr, n):
+            if n < 0:
+                arr[:n] = arr[-n:]
+                arr[n:] = 2*clip_k+1
+            elif n > 0:
+                arr[n:] = arr[:-n]
+                arr[:n] = 1
+            return arr
+        dist = np.full(seq_len, 2 * clip_k + 1)
+        dist[0:2 * clip_k] = np.arange(1, 2 * clip_k + 1)
+        dist = tf.convert_to_tensor(np.array([shift(dist.copy(), i) for i in range(-clip_k, seq_len-clip_k)]), name="dist")
+        dist = dist[:tf.shape(Q_)[1], :tf.shape(Q_)[1]]
+
+        # Relative Position Embedding
+        with tf.device('/cpu:0'), tf.variable_scope("relative-pos-embeddings"):
+            WK = tf.Variable(tf.random_uniform([2*clip_k+2, num_units//num_heads], -0.25, 0.25), name="WK")
+            aK = tf.nn.embedding_lookup(WK, dist)
+            WV = tf.Variable(tf.random_uniform([2 * clip_k + 2, num_units // num_heads], -0.25, 0.25), name="WV")
+            aV = tf.nn.embedding_lookup(WV, dist)
+
+        # Multiplication
+        outputs = tf.matmul(Q_, tf.transpose(K_, [0, 2, 1]))  # (h*N, T_q, T_k)
+        # Relative Position Embedding
+        aKT = tf.transpose(aK, [0, 2, 1])
+        QaK = tf.matmul(tf.transpose(Q_, [1, 0, 2]), aKT)
+        QaK_res = tf.transpose(QaK, [1, 0, 2])
+        outputs = tf.add(outputs, QaK_res)
+
+        # Scale
+        outputs /= K_.get_shape().as_list()[-1] ** 0.5
+
+        # Key Masking
+        key_masks = tf.sign(tf.abs(tf.reduce_sum(keys, axis=-1)))  # (N, T_k)
+        key_masks = tf.tile(key_masks, [num_heads, 1])  # (h*N, T_k)
+        key_masks = tf.tile(tf.expand_dims(key_masks, 1), [1, tf.shape(queries)[1], 1])  # (h*N, T_q, T_k)
+
+        paddings = tf.ones_like(outputs) * (-2 ** 32 + 1)
+        outputs = tf.where(tf.equal(key_masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
+
+        # Causality = Future blinding
+        if causality:
+            diag_vals = tf.ones_like(outputs[0, :, :])  # (T_q, T_k)
+            tril = tf.contrib.linalg.LinearOperatorTriL(diag_vals).to_dense()  # (T_q, T_k)
+            masks = tf.tile(tf.expand_dims(tril, 0), [tf.shape(outputs)[0], 1, 1])  # (h*N, T_q, T_k)
+
+            paddings = tf.ones_like(masks) * (-2 ** 32 + 1)
+            outputs = tf.where(tf.equal(masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
+
+        # Activation
+        outputs = tf.nn.softmax(outputs)  # (h*N, T_q, T_k)
+
+        # Query Masking
+        query_masks = tf.sign(tf.abs(tf.reduce_sum(queries, axis=-1)))  # (N, T_q)
+        query_masks = tf.tile(query_masks, [num_heads, 1])  # (h*N, T_q)
+        query_masks = tf.tile(tf.expand_dims(query_masks, -1), [1, 1, tf.shape(keys)[1]])  # (h*N, T_q, T_k)
+        outputs *= query_masks  # broadcasting. (N, T_q, C)
+
+        # Dropouts
+        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(is_training))
+
+        # Relative Position Embedding
+        outputs_aV = tf.transpose(tf.matmul(tf.transpose(outputs, [1, 0, 2]), aV), [1, 0, 2])
+        # Weighted sum
+        outputs = tf.matmul(outputs, V_)  # ( h*N, T_q, C/h)
+        outputs = tf.add(outputs, outputs_aV)
 
         # Restore shape
         outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
