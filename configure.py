@@ -24,14 +24,18 @@ def parse_args():
                         type=int, help="Dimensionality of word embedding (default: 300)")
     parser.add_argument("--dist_embedding_size", default=50,
                         type=int, help="Dimensionality of relative distance embedding (default: 50)")
+    parser.add_argument("--emb_dropout_keep_prob", default=0.8,
+                        type=float, help="Dropout keep probability of embedding layer (default: 0.8)")
     # RNN
     parser.add_argument("--hidden_size", default=300,
                         type=int, help="Dimensionality of RNN hidden (default: 512)")
     parser.add_argument("--rnn_dropout_keep_prob", default=0.7,
                         type=float, help="Dropout keep probability of RNN (default: 0.7)")
     # Attention
-    parser.add_argument("--clip_k", default=4,
-                        type=int, help="Size of clipping the relative position (default: 4)")
+    parser.add_argument("--num_heads", default=4,
+                        type=int, help="Number of heads in multi-head attention (default: 4)")
+    parser.add_argument("--clip_k", default=3,
+                        type=int, help="Size of clipping the relative position (default: 3)")
     parser.add_argument("--attention_size", default=50,
                         type=int, help="Dimensionality of attention (default: 50)")
     # Misc

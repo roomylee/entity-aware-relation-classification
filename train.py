@@ -69,6 +69,8 @@ def train():
                 dist_vocab_size=len(dist_vocab_processor.vocabulary_),
                 dist_embedding_size=FLAGS.dist_embedding_size,
                 hidden_size=FLAGS.hidden_size,
+                num_heads=FLAGS.num_heads,
+                clip_k=FLAGS.clip_k,
                 attention_size=FLAGS.attention_size,
                 use_elmo=(FLAGS.embeddings == 'elmo'),
                 l2_reg_lambda=FLAGS.l2_reg_lambda)
