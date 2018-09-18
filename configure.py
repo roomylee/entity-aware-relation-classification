@@ -39,8 +39,8 @@ def parse_args():
                         type=str, help="Description for model")
     parser.add_argument("--dropout_keep_prob", default=0.5,
                         type=float, help="Dropout keep probability of output layer (default: 0.5)")
-    parser.add_argument("--l2_reg_lambda", default=0.0,
-                        type=float, help="L2 regularization lambda (default: 0.0)")
+    parser.add_argument("--l2_reg_lambda", default=1e-5,
+                        type=float, help="L2 regularization lambda (default: 1e-5)")
 
     # Training parameters
     parser.add_argument("--batch_size", default=20,

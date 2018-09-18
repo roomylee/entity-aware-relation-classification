@@ -45,12 +45,11 @@ class SelfAttentiveLSTM:
         with tf.variable_scope("self-attention"):
             self.self_att = relative_multihead_attention(self.embedded_chars, self.embedded_chars,
                                                          num_units=embedding_size, num_heads=4,
-                                                         clip_k=4, seq_len=sequence_length,
-                                                         dropout_rate=0.1)
+                                                         clip_k=4, seq_len=sequence_length)
 
         with tf.variable_scope("entity-attention"):
-            self.entity_att = entity_attention(self.embedded_chars, self.input_e1, self.input_e2,
-                                               attention_size=attention_size*6)
+            self.entity_att = entity_attention(self.self_att, self.input_e1, self.input_e2,
+                                               attention_size=attention_size)
             self.concat_att = tf.concat([self.self_att, self.entity_att], axis=-1)
 
         with tf.variable_scope("bi-rnn"):
@@ -60,7 +59,7 @@ class SelfAttentiveLSTM:
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                                   cell_bw=bw_cell,
-                                                                  inputs=self.entity_att,
+                                                                  inputs=self.concat_att,
                                                                   sequence_length=text_length,
                                                                   dtype=tf.float32)
 
