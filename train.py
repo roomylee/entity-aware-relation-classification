@@ -86,6 +86,15 @@ def train():
             # Logger
             logger = Logger(out_dir)
 
+            # Summaries for loss and accuracy
+            loss_summary = tf.summary.scalar("loss", model.loss)
+            acc_summary = tf.summary.scalar("accuracy", model.accuracy)
+
+            # Train Summaries
+            train_summary_op = tf.summary.merge([loss_summary, acc_summary])
+            train_summary_dir = os.path.join(out_dir, "summaries", "train")
+            train_summary_writer = tf.summary.FileWriter(train_summary_dir, sess.graph)
+
             # Checkpoint directory. Tensorflow assumes this directory already exists so we need to create it
             checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
             checkpoint_prefix = os.path.join(checkpoint_dir, "model")
@@ -128,11 +137,13 @@ def train():
                     model.input_e2: train_be2,
                     model.input_d1: train_bd1,
                     model.input_d2: train_bd2,
+                    model.emb_dropout_keep_prob: FLAGS.emb_dropout_keep_prob,
                     model.rnn_dropout_keep_prob: FLAGS.rnn_dropout_keep_prob,
                     model.dropout_keep_prob: FLAGS.dropout_keep_prob
                 }
-                _, step, loss, accuracy = sess.run(
-                    [train_op, global_step, model.loss, model.accuracy], feed_dict)
+                _, step, summaries, loss, accuracy = sess.run(
+                    [train_op, global_step, train_summary_op, model.loss, model.accuracy], feed_dict)
+                train_summary_writer.add_summary(summaries, step)
 
                 # Training log display
                 if step % FLAGS.display_every == 0:
@@ -160,6 +171,7 @@ def train():
                             model.input_e2: test_be2,
                             model.input_d1: test_bd1,
                             model.input_d2: test_bd2,
+                            model.emb_dropout_keep_prob: 1.0,
                             model.rnn_dropout_keep_prob: 1.0,
                             model.dropout_keep_prob: 1.0
                         }
