@@ -28,7 +28,7 @@ def parse_args():
                         type=float, help="Dropout keep probability of embedding layer (default: 0.8)")
     # RNN
     parser.add_argument("--hidden_size", default=300,
-                        type=int, help="Dimensionality of RNN hidden (default: 512)")
+                        type=int, help="Dimensionality of RNN hidden (default: 300)")
     parser.add_argument("--rnn_dropout_keep_prob", default=0.7,
                         type=float, help="Dropout keep probability of RNN (default: 0.7)")
     # Attention
