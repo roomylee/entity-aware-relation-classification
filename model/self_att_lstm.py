@@ -1,13 +1,14 @@
 import tensorflow as tf
 import tensorflow_hub as hub
 from model.attention import attention, attention_with_no_size, multihead_attention, entity_attention, \
-    relative_multihead_attention
+    relative_multihead_attention, latent_type_attention
 
 
 class SelfAttentiveLSTM:
     def __init__(self, sequence_length, num_classes,
                  vocab_size, embedding_size, dist_vocab_size, dist_embedding_size,
-                 hidden_size, attention_size, use_elmo=False, l2_reg_lambda=0.0):
+                 hidden_size, clip_k, num_heads, attention_size,
+                 use_elmo=False, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_x')
         self.input_y = tf.placeholder(tf.float32, shape=[None, num_classes], name='input_y')
@@ -16,6 +17,7 @@ class SelfAttentiveLSTM:
         self.input_e2 = tf.placeholder(tf.int32, shape=[None, ], name='input_e2')
         self.input_d1 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_d1')
         self.input_d2 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_d2')
+        self.emb_dropout_keep_prob = tf.placeholder(tf.float32, name='emb_dropout_keep_prob')
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
 
@@ -39,13 +41,15 @@ class SelfAttentiveLSTM:
         #
         # self.embedded_x = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
 
-        with tf.variable_scope('drop-out-after-embeddings'):
-            self.embedded_chars = tf.nn.dropout(self.embedded_chars,  self.rnn_dropout_keep_prob)
+        with tf.variable_scope('dropout-embeddings'):
+            self.embedded_chars = tf.nn.dropout(self.embedded_chars,  self.emb_dropout_keep_prob)
 
         with tf.variable_scope("self-attention"):
+            # self.self_att = multihead_attention(self.embedded_chars, self.embedded_chars,
+            #                                     num_units=embedding_size, num_heads=num_heads)
             self.self_att = relative_multihead_attention(self.embedded_chars, self.embedded_chars,
-                                                         num_units=embedding_size, num_heads=4,
-                                                         clip_k=4, seq_len=sequence_length)
+                                                         num_units=embedding_size, num_heads=num_heads,
+                                                         clip_k=clip_k, seq_len=sequence_length)
 
         with tf.variable_scope("entity-attention"):
             self.entity_att = entity_attention(self.self_att, self.input_e1, self.input_e2,
@@ -62,17 +66,24 @@ class SelfAttentiveLSTM:
                                                                   inputs=self.concat_att,
                                                                   sequence_length=text_length,
                                                                   dtype=tf.float32)
+            self.rnn_outputs_concat = tf.concat(self.rnn_outputs, axis=-1)
+            self.rnn_outputs_add = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
 
         # Attention layer
         with tf.variable_scope('attention'):
-            self.att_output, self.alphas = attention(self.rnn_outputs, attention_size, return_alphas=True)
+            self.att_output, self.alphas = attention(self.rnn_outputs_concat, attention_size, return_alphas=True)
         # with tf.variable_scope('attention-with-no-size'):
-        #     self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
-        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs, return_alphas=True)
+        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs_add, return_alphas=True)
+
+        # Latent Entity Type
+        with tf.variable_scope("latent-type-attention"):
+            self.e1_type, self.e2_type = latent_type_attention(self.rnn_outputs_concat, self.input_e1, self.input_e2,
+                                                               num_type=3, latent_size=attention_size)
+            self.output_lt = tf.concat([self.att_output, self.e1_type, self.e2_type], axis=-1)
 
         # Dropout
         with tf.variable_scope('dropout'):
-            self.h_drop = tf.nn.dropout(self.att_output, self.dropout_keep_prob)
+            self.h_drop = tf.nn.dropout(self.output_lt, self.dropout_keep_prob)
 
         with tf.variable_scope('batch-norm'):
             self.h_drop = tf.layers.batch_normalization(self.h_drop)

@@ -127,6 +127,32 @@ def entity_attention(inputs, e1, e2, attention_size):
     return output
 
 
+def latent_type_attention(inputs, e1, e2, num_type=3, latent_size=100):
+    attn = tf.layers.dense(inputs, latent_size, activation=tf.nn.relu,
+                           kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
+    e1_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e1)[0]), axis=-1), tf.expand_dims(e1, axis=-1)], axis=-1)
+    e1_h = tf.gather_nd(attn, e1_idx)
+    e2_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e2)[0]), axis=-1), tf.expand_dims(e2, axis=-1)], axis=-1)
+    e2_h = tf.gather_nd(attn, e2_idx)
+
+    latentT = tf.get_variable("latentT", shape=[num_type, latent_size], initializer=tf.contrib.layers.xavier_initializer())
+
+    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
+    e1_sim = tf.matmul(e1_h, tf.transpose(latentT), name='e1_sim')  # (B,3) shape
+    e1_alphas = tf.nn.softmax(e1_sim, name='e1_alphas')  # (B,3) shape
+    e1_type = tf.matmul(e1_alphas, latentT, name='e1_type')  # (B, latent_size)
+
+    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
+    e2_sim = tf.matmul(e2_h, tf.transpose(latentT), name='e2_sim')  # (B,3) shape
+    e2_alphas = tf.nn.softmax(e2_sim, name='e2_alphas')  # (B,3) shape
+    e2_type = tf.matmul(e2_alphas, latentT, name='e2_type')  # (B, latent_size)
+
+    # # Normalize
+    # output = layer_norm(output)  # (N, T_q, C)
+
+    return e1_type, e2_type
+
+
 def multihead_attention(queries,
                         keys,
                         num_units,
