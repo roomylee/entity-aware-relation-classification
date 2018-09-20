@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-def attention_with_latent_var(inputs, attention_size, time_major=False):
+def attention_with_latent_var(inputs, attention_size):
     """
     Attention mechanism layer which reduces RNN/Bi-RNN outputs with Attention vector.
 
@@ -20,26 +20,7 @@ def attention_with_latent_var(inputs, attention_size, time_major=False):
                         `[max_time, batch_size, cell.output_size]`.
                 In case of Bidirectional RNN, this must be a tuple (outputs_fw, outputs_bw) containing the forward and
                 the backward RNN outputs `Tensor`.
-                    If time_major == False (default),
-                        outputs_fw is a `Tensor` shaped:
-                        `[batch_size, max_time, cell_fw.output_size]`
-                        and outputs_bw is a `Tensor` shaped:
-                        `[batch_size, max_time, cell_bw.output_size]`.
-                    If time_major == True,
-                        outputs_fw is a `Tensor` shaped:
-                        `[max_time, batch_size, cell_fw.output_size]`
-                        and outputs_bw is a `Tensor` shaped:
-                        `[max_time, batch_size, cell_bw.output_size]`.
         attention_size: Linear size of the Attention weights.
-        time_major: The shape format of the `inputs` Tensors.
-            If true, these `Tensors` must be shaped `[max_time, batch_size, depth]`.
-            If false, these `Tensors` must be shaped `[batch_size, max_time, depth]`.
-            Using `time_major = True` is a bit more efficient because it avoids
-            transposes at the beginning and end of the RNN calculation.  However,
-            most TensorFlow data is batch-major, so by default this function
-            accepts input and emits output in batch-major form.
-        return_alphas: Whether to return attention coefficients variable along with layer's output.
-            Used for visualization purpose.
     Returns:
         The Attention output `Tensor`.
         In case of RNN, this will be a `Tensor` shaped:
@@ -47,15 +28,6 @@ def attention_with_latent_var(inputs, attention_size, time_major=False):
         In case of Bidirectional RNN, this will be a `Tensor` shaped:
             `[batch_size, cell_fw.output_size + cell_bw.output_size]`.
     """
-
-    if isinstance(inputs, tuple):
-        # In case of Bi-RNN, concatenate the forward and the backward RNN outputs.
-        inputs = tf.concat(inputs, 2)
-
-    if time_major:
-        # (T,B,D) => (B,T,D)
-        inputs = tf.transpose(inputs, [1, 0, 2])
-
     hidden_size = inputs.shape[2].value  # D value - hidden size of the RNN layer
 
     # Trainable parameters
@@ -78,11 +50,7 @@ def attention_with_latent_var(inputs, attention_size, time_major=False):
     return output, alphas
 
 
-def attention_with_no_size(inputs, time_major=False, return_alphas=False):
-    if time_major:
-        # (T,B,D) => (B,T,D)
-        inputs = tf.transpose(inputs, [1, 0, 2])
-
+def attention_with_no_size(inputs):
     hidden_size = inputs.shape[2].value
     u_omega = tf.get_variable("u_omega", [hidden_size], initializer=tf.contrib.layers.xavier_initializer())
     with tf.name_scope('v'):
@@ -121,7 +89,7 @@ def entity_attention(inputs, e1, e2, attention_size):
     return output
 
 
-def latent_type_attention(inputs, e1, e2, num_type=3, latent_size=100):
+def latent_type_attention(inputs, e1, e2, num_type, latent_size):
     attn = tf.layers.dense(inputs, latent_size, activation=tf.nn.relu,
                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
     e1_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e1)[0]), axis=-1), tf.expand_dims(e1, axis=-1)], axis=-1)
@@ -153,8 +121,6 @@ def multihead_attention(queries,
                         num_units,
                         num_heads,
                         dropout_rate=0,
-                        is_training=True,
-                        causality=False,
                         scope="multihead_attention",
                         reuse=None):
     '''Applies multihead attention.
@@ -164,8 +130,6 @@ def multihead_attention(queries,
       keys: A 3d tensor with shape of [N, T_k, C_k].
       num_units: A scalar. Attention size.
       dropout_rate: A floating point number.
-      is_training: Boolean. Controller of mechanism for dropout.
-      causality: Boolean. If true, units that reference the future are masked.
       num_heads: An int. Number of heads.
       scope: Optional scope for `variable_scope`.
       reuse: Boolean, whether to reuse the weights of a previous layer
@@ -202,15 +166,6 @@ def multihead_attention(queries,
         paddings = tf.ones_like(outputs) * (-2 ** 32 + 1)
         outputs = tf.where(tf.equal(key_masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
 
-        # Causality = Future blinding
-        if causality:
-            diag_vals = tf.ones_like(outputs[0, :, :])  # (T_q, T_k)
-            tril = tf.contrib.linalg.LinearOperatorTriL(diag_vals).to_dense()  # (T_q, T_k)
-            masks = tf.tile(tf.expand_dims(tril, 0), [tf.shape(outputs)[0], 1, 1])  # (h*N, T_q, T_k)
-
-            paddings = tf.ones_like(masks) * (-2 ** 32 + 1)
-            outputs = tf.where(tf.equal(masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
-
         # Activation
         outputs = tf.nn.softmax(outputs)  # (h*N, T_q, T_k)
 
@@ -221,7 +176,7 @@ def multihead_attention(queries,
         outputs *= query_masks  # broadcasting. (N, T_q, C)
 
         # Dropouts
-        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(is_training))
+        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(True))
 
         # Weighted sum
         outputs = tf.matmul(outputs, V_)  # ( h*N, T_q, C/h)
@@ -245,8 +200,6 @@ def relative_multihead_attention(queries,
                                  clip_k,
                                  seq_len,
                                  dropout_rate=0,
-                                 is_training=True,
-                                 causality=False,
                                  scope="relative_multihead_attention",
                                  reuse=None):
     '''Applies multihead attention.
@@ -256,8 +209,6 @@ def relative_multihead_attention(queries,
       keys: A 3d tensor with shape of [N, T_k, C_k].
       num_units: A scalar. Attention size.
       dropout_rate: A floating point number.
-      is_training: Boolean. Controller of mechanism for dropout.
-      causality: Boolean. If true, units that reference the future are masked.
       num_heads: An int. Number of heads.
       scope: Optional scope for `variable_scope`.
       reuse: Boolean, whether to reuse the weights of a previous layer
@@ -319,15 +270,6 @@ def relative_multihead_attention(queries,
         paddings = tf.ones_like(outputs) * (-2 ** 32 + 1)
         outputs = tf.where(tf.equal(key_masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
 
-        # Causality = Future blinding
-        if causality:
-            diag_vals = tf.ones_like(outputs[0, :, :])  # (T_q, T_k)
-            tril = tf.contrib.linalg.LinearOperatorTriL(diag_vals).to_dense()  # (T_q, T_k)
-            masks = tf.tile(tf.expand_dims(tril, 0), [tf.shape(outputs)[0], 1, 1])  # (h*N, T_q, T_k)
-
-            paddings = tf.ones_like(masks) * (-2 ** 32 + 1)
-            outputs = tf.where(tf.equal(masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
-
         # Activation
         outputs = tf.nn.softmax(outputs)  # (h*N, T_q, T_k)
 
@@ -338,7 +280,7 @@ def relative_multihead_attention(queries,
         outputs *= query_masks  # broadcasting. (N, T_q, C)
 
         # Dropouts
-        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(is_training))
+        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(True))
 
         # Relative Position Embedding
         outputs_aV = tf.transpose(tf.matmul(tf.transpose(outputs, [1, 0, 2]), aV), [1, 0, 2])
@@ -354,42 +296,6 @@ def relative_multihead_attention(queries,
 
         # Normalize
         outputs = layer_norm(outputs)  # (N, T_q, C)
-
-    return outputs
-
-
-def feedforward(inputs,
-                num_units=[150, 300],
-                scope="multihead_attention",
-                reuse=None):
-    '''Point-wise feed forward net.
-
-    Args:
-      inputs: A 3d tensor with shape of [N, T, C].
-      num_units: A list of two integers.
-      scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
-
-    Returns:
-      A 3d tensor with the same shape and dtype as inputs
-    '''
-    with tf.variable_scope(scope, reuse=reuse):
-        # Inner layer
-        params = {"inputs": inputs, "filters": num_units[0], "kernel_size": 1,
-                  "activation": tf.nn.relu, "use_bias": True}
-        outputs = tf.layers.conv1d(**params)
-
-        # Readout layer
-        params = {"inputs": outputs, "filters": num_units[1], "kernel_size": 1,
-                  "activation": None, "use_bias": True}
-        outputs = tf.layers.conv1d(**params)
-
-        # Residual connection
-        outputs += inputs
-
-        # Normalize
-        outputs = layer_norm(outputs)
 
     return outputs
 
