@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow_hub as hub
-from model.attention import attention, attention_with_no_size, multihead_attention, entity_attention, \
+from model.attention import attention_with_latent_var, attention_with_no_size, multihead_attention, entity_attention, \
     relative_multihead_attention, latent_type_attention
 
 
@@ -70,10 +70,10 @@ class SelfAttentiveLSTM:
             self.rnn_outputs_add = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
 
         # Attention layer
-        with tf.variable_scope('attention'):
-            self.att_output, self.alphas = attention(self.rnn_outputs_concat, attention_size, return_alphas=True)
+        with tf.variable_scope('attention-with-latent-var'):
+            self.att_output, self.alphas = attention_with_latent_var(self.rnn_outputs_concat, attention_size)
         # with tf.variable_scope('attention-with-no-size'):
-        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs_add, return_alphas=True)
+        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs_add)
 
         # Latent Entity Type
         with tf.variable_scope("latent-type-attention"):

@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-def attention(inputs, attention_size, time_major=False, return_alphas=False):
+def attention_with_latent_var(inputs, attention_size, time_major=False):
     """
     Attention mechanism layer which reduces RNN/Bi-RNN outputs with Attention vector.
 
@@ -54,14 +54,14 @@ def attention(inputs, attention_size, time_major=False, return_alphas=False):
 
     if time_major:
         # (T,B,D) => (B,T,D)
-        inputs = tf.array_ops.transpose(inputs, [1, 0, 2])
+        inputs = tf.transpose(inputs, [1, 0, 2])
 
     hidden_size = inputs.shape[2].value  # D value - hidden size of the RNN layer
 
     # Trainable parameters
-    w_omega = tf.Variable(tf.random_normal([hidden_size, attention_size], stddev=0.1))
-    b_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
-    u_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
+    w_omega = tf.get_variable("w_omega", [hidden_size, attention_size], initializer=tf.contrib.layers.xavier_initializer())
+    b_omega = tf.get_variable("b_omega", [attention_size], initializer=tf.contrib.layers.xavier_initializer())
+    u_omega = tf.get_variable("u_omega", [attention_size], initializer=tf.contrib.layers.xavier_initializer())
 
     with tf.name_scope('v'):
         # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
@@ -75,30 +75,24 @@ def attention(inputs, attention_size, time_major=False, return_alphas=False):
     # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
 
-    if not return_alphas:
-        return output
-    else:
-        return output, alphas
+    return output, alphas
+
 
 def attention_with_no_size(inputs, time_major=False, return_alphas=False):
     if time_major:
         # (T,B,D) => (B,T,D)
-        inputs = tf.array_ops.transpose(inputs, [1, 0, 2])
+        inputs = tf.transpose(inputs, [1, 0, 2])
 
-    batch_size = inputs.shape[0].value
     hidden_size = inputs.shape[2].value
-    u_omega = tf.Variable(tf.random_normal([hidden_size], stddev=0.1))
-    with tf.name_scope('tan_h'):
+    u_omega = tf.get_variable("u_omega", [hidden_size], initializer=tf.contrib.layers.xavier_initializer())
+    with tf.name_scope('v'):
         v = tf.tanh(inputs)
 
     vu = tf.tensordot(v, u_omega, axes=1, name='vu')
     alphas = tf.nn.softmax(vu, name='alphas')
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
 
-    if not return_alphas:
-        return output
-    else:
-        return output, alphas
+    return output, alphas
 
 
 def entity_attention(inputs, e1, e2, attention_size):
@@ -148,7 +142,8 @@ def latent_type_attention(inputs, e1, e2, num_type=3, latent_size=100):
     e2_type = tf.matmul(e2_alphas, latentT, name='e2_type')  # (B, latent_size)
 
     # # Normalize
-    # output = layer_norm(output)  # (N, T_q, C)
+    e1_type = layer_norm(e1_type)  # (N, T_q, C)
+    e2_type = layer_norm(e2_type)  # (N, T_q, C)
 
     return e1_type, e2_type
 
@@ -295,14 +290,14 @@ def relative_multihead_attention(queries,
             return arr
         dist = np.full(seq_len, 2 * clip_k + 1)
         dist[0:2 * clip_k] = np.arange(1, 2 * clip_k + 1)
-        dist = tf.convert_to_tensor(np.array([shift(dist.copy(), i) for i in range(-clip_k, seq_len-clip_k)]), name="dist")
+        dist = tf.constant(np.array([shift(dist.copy(), i) for i in range(-clip_k, seq_len-clip_k)]), name="dist")
         dist = dist[:tf.shape(Q_)[1], :tf.shape(Q_)[1]]
 
         # Relative Position Embedding
         with tf.device('/cpu:0'), tf.variable_scope("relative-pos-embeddings"):
-            WK = tf.Variable(tf.random_uniform([2*clip_k+2, num_units//num_heads], -0.25, 0.25), name="WK")
+            WK = tf.get_variable("WK", [2*clip_k+2, num_units//num_heads], initializer=tf.contrib.layers.xavier_initializer())
             aK = tf.nn.embedding_lookup(WK, dist)
-            WV = tf.Variable(tf.random_uniform([2 * clip_k + 2, num_units // num_heads], -0.25, 0.25), name="WV")
+            WV = tf.get_variable("WV", [2*clip_k+2, num_units//num_heads], initializer=tf.contrib.layers.xavier_initializer())
             aV = tf.nn.embedding_lookup(WV, dist)
 
         # Multiplication
