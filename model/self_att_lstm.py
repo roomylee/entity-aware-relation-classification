@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow_hub as hub
 from model.attention import attention_with_latent_var, attention_with_no_size, multihead_attention, entity_attention, \
-    relative_multihead_attention, latent_type_attention
+    relative_multihead_attention, latent_type_attention, attention_with_relation
 
 
 class SelfAttentiveLSTM:
@@ -39,54 +39,72 @@ class SelfAttentiveLSTM:
         #     self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
         #     self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)
         #
-        # self.embedded_x = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
+        #     self.embedded_chars = tf.concat([self.embedded_chars,
+        #                                      self.d1[:, :tf.shape(self.embedded_chars)[1]],
+        #                                      self.d2[:, :tf.shape(self.embedded_chars)[1]]], axis=-1)
+        #     embedding_size = embedding_size + 2 * dist_embedding_size
 
         with tf.variable_scope('dropout-embeddings'):
             self.embedded_chars = tf.nn.dropout(self.embedded_chars,  self.emb_dropout_keep_prob)
 
         with tf.variable_scope("self-attention"):
-            # self.self_att = multihead_attention(self.embedded_chars, self.embedded_chars,
-            #                                     num_units=embedding_size, num_heads=num_heads)
-            self.self_att = relative_multihead_attention(self.embedded_chars, self.embedded_chars,
-                                                         num_units=embedding_size, num_heads=num_heads,
-                                                         clip_k=clip_k, seq_len=sequence_length)
+            self.self_att = multihead_attention(self.embedded_chars, self.embedded_chars,
+                                                num_units=embedding_size, num_heads=num_heads)
+            # self.self_att = relative_multihead_attention(self.embedded_chars, self.embedded_chars,
+            #                                              num_units=embedding_size, num_heads=num_heads,
+            #                                              clip_k=clip_k, seq_len=sequence_length)
 
-        with tf.variable_scope("entity-attention"):
-            self.entity_att = entity_attention(self.self_att, self.input_e1, self.input_e2,
-                                               attention_size=attention_size)
-            self.concat_att = tf.concat([self.self_att, self.entity_att], axis=-1)
-
-        with tf.variable_scope("bi-rnn"):
+        with tf.variable_scope("bi-rnn-1"):
             _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
             _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
-            self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
-                                                                  cell_bw=bw_cell,
-                                                                  inputs=self.concat_att,
-                                                                  sequence_length=text_length,
-                                                                  dtype=tf.float32)
-            self.rnn_outputs_concat = tf.concat(self.rnn_outputs, axis=-1)
-            self.rnn_outputs_add = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
+            self.rnn_outputs1, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
+                                                                   cell_bw=bw_cell,
+                                                                   inputs=self.self_att,
+                                                                   sequence_length=text_length,
+                                                                   dtype=tf.float32)
+            self.rnn_outputs1_concat = tf.concat(self.rnn_outputs1, axis=-1)
+            # self.rnn_outputs1_add = tf.add(self.rnn_outputs1[0], self.rnn_outputs1[1])
+
+        with tf.variable_scope('batch-norm-1'):
+            self.rnn_outputs1_concat = tf.layers.batch_normalization(self.rnn_outputs1_concat)
+
+        with tf.variable_scope("entity-attention"):
+            self.entity_att = entity_attention(self.rnn_outputs1_concat, self.input_e1, self.input_e2,
+                                               attention_size=attention_size*2)
+            self.entity_att = tf.concat([self.rnn_outputs1_concat, self.entity_att], axis=-1)
+
+        with tf.variable_scope("bi-rnn-2"):
+            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
+            fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
+            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
+            bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
+            self.rnn_outputs2, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
+                                                                   cell_bw=bw_cell,
+                                                                   inputs=self.entity_att,
+                                                                   sequence_length=text_length,
+                                                                   dtype=tf.float32)
+            self.rnn_outputs2_concat = tf.concat(self.rnn_outputs2, axis=-1)
+            # self.rnn_outputs2_add = tf.add(self.rnn_outputs2[0], self.rnn_outputs2[1])
+
+        with tf.variable_scope('batch-norm-2'):
+            self.rnn_outputs2_concat = tf.layers.batch_normalization(self.rnn_outputs2_concat)
 
         # Attention layer
-        with tf.variable_scope('attention-with-latent-var'):
-            self.att_output, self.alphas = attention_with_latent_var(self.rnn_outputs_concat, attention_size)
+        # with tf.variable_scope('attention-with-latent-var'):
+        #     self.att_output, self.alphas = attention_with_latent_var(self.rnn_outputs_concat, attention_size)
         # with tf.variable_scope('attention-with-no-size'):
         #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs_add)
-
-        # Latent Entity Type
-        with tf.variable_scope("latent-type-attention"):
-            self.e1_type, self.e2_type = latent_type_attention(self.rnn_outputs_concat, self.input_e1, self.input_e2,
-                                                               num_type=3, latent_size=attention_size)
-            self.output_lt = tf.concat([self.att_output, self.e1_type, self.e2_type], axis=-1)
+        with tf.variable_scope('attention-with-relation'):
+            self.att_output, self.alphas = attention_with_relation(self.rnn_outputs2_concat,
+                                                                   self.input_e1,
+                                                                   self.input_e2,
+                                                                   attention_size=attention_size)
 
         # Dropout
         with tf.variable_scope('dropout'):
-            self.h_drop = tf.nn.dropout(self.output_lt, self.dropout_keep_prob)
-
-        with tf.variable_scope('batch-norm'):
-            self.h_drop = tf.layers.batch_normalization(self.h_drop)
+            self.h_drop = tf.nn.dropout(self.att_output, self.dropout_keep_prob)
 
         # Fully connected layer
         with tf.variable_scope('output'):
