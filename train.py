@@ -27,7 +27,7 @@ def train():
     # [27 39 40 41 42  1 43  0  0 ... 0]
     # dimension = MAX_SENTENCE_LENGTH
     vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
-    vocab_processor.fit(train_text)
+    vocab_processor.fit(train_text + test_text)
     train_x = np.array(list(vocab_processor.transform(train_text)))
     test_x = np.array(list(vocab_processor.transform(test_text)))
     train_text = np.array(train_text)
@@ -44,7 +44,7 @@ def train():
     # [11 12 13 14 15  16  21  17  17  17 ...  17]
     # dimension = MAX_SENTENCE_LENGTH
     dist_vocab_processor = tf.contrib.learn.preprocessing.VocabularyProcessor(FLAGS.max_sentence_length)
-    dist_vocab_processor.fit(train_dist1 + train_dist2)
+    dist_vocab_processor.fit(train_dist1 + train_dist2 + test_dist1 + test_dist2)
     train_d1 = np.array(list(dist_vocab_processor.transform(train_dist1)))
     train_d2 = np.array(list(dist_vocab_processor.transform(train_dist2)))
     test_d1 = np.array(list(dist_vocab_processor.transform(test_dist1)))
