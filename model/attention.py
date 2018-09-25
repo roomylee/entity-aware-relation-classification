@@ -58,7 +58,7 @@ def attention_with_relation(inputs, e1, e2, d1, d2, attention_size):
     _e1_h = tf.gather_nd(inputs, e1_idx)  # (batch, hidden)
     e2_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e2)[0]), axis=-1), tf.expand_dims(e2, axis=-1)], axis=-1)
     _e2_h = tf.gather_nd(inputs, e2_idx)  # (batch, hidden)
-    e1_type, e2_type = latent_type_attention(_e1_h, _e2_h, num_type=3)  # (batch, hidden)
+    e1_type, e2_type, e1_alphas, e2_alphas = latent_type_attention(_e1_h, _e2_h, num_type=3)  # (batch, hidden)
     e1_h = tf.concat([_e1_h, e1_type], axis=-1)  # (batch, 2*hidden)
     e2_h = tf.concat([_e2_h, e2_type], axis=-1)  # (batch, 2*hidden)
 
@@ -89,7 +89,7 @@ def latent_type_attention(e1, e2, num_type=3):
     e2_alphas = tf.nn.softmax(e2_sim, name='e2_alphas')  # (batch, num_type)
     e2_type = tf.matmul(e2_alphas, latentT, name='e2_type')  # (batch, hidden)
 
-    return e1_type, e2_type
+    return e1_type, e2_type, e1_alphas, e2_alphas
 
 
 def multihead_attention(queries, keys, num_units, num_heads,
