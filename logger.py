@@ -47,7 +47,7 @@ class Logger:
                                  "SemEval2010_task8_all_data",
                                  "SemEval2010_task8_scorer-v1.2",
                                  "semeval2010_task8_scorer-v1.2.pl")
-        target_path = " resource/target.txt"
+        target_path = os.path.join(os.path.curdir, "resource", "target.txt")
         process = subprocess.Popen(["perl", perl_path, prediction_path, target_path], stdout=subprocess.PIPE)
         str_parse = str(process.communicate()[0]).split("\\n")[-2]
         idx = str_parse.find('%')
