@@ -77,8 +77,11 @@ def train():
 
             # Define Training procedure
             global_step = tf.Variable(0, name="global_step", trainable=False)
-            train_op = tf.train.AdadeltaOptimizer(1., 0.95, 1e-6).minimize(model.loss, global_step=global_step)
-            # train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(model.loss, global_step=global_step)
+            optimizer = tf.train.AdadeltaOptimizer(1.0, 0.9, 1e-6)
+            # optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate, 0.9, 0.999)
+            gvs = optimizer.compute_gradients(model.loss)
+            capped_gvs = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gvs]
+            train_op = optimizer.apply_gradients(capped_gvs, global_step=global_step)
 
             # Output directory for models and summaries
             timestamp = str(int(time.time()))
