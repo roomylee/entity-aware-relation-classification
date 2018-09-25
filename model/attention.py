@@ -2,172 +2,103 @@ import tensorflow as tf
 import numpy as np
 
 
+initializer = tf.keras.initializers.glorot_normal()
+
+
 def attention_with_latent_var(inputs, attention_size):
-    """
-    Attention mechanism layer which reduces RNN/Bi-RNN outputs with Attention vector.
-
-    The idea was proposed in the article by Z. Yang et al., "Hierarchical Attention Networks
-     for Document Classification", 2016: http://www.aclweb.org/anthology/N16-1174.
-    Variables notation is also inherited from the article
-
-    Args:
-        inputs: The Attention inputs.
-            Matches outputs of RNN/Bi-RNN layer (not final state):
-                In case of RNN, this must be RNN outputs `Tensor`:
-                    If time_major == False (default), this must be a tensor of shape:
-                        `[batch_size, max_time, cell.output_size]`.
-                    If time_major == True, this must be a tensor of shape:
-                        `[max_time, batch_size, cell.output_size]`.
-                In case of Bidirectional RNN, this must be a tuple (outputs_fw, outputs_bw) containing the forward and
-                the backward RNN outputs `Tensor`.
-        attention_size: Linear size of the Attention weights.
-    Returns:
-        The Attention output `Tensor`.
-        In case of RNN, this will be a `Tensor` shaped:
-            `[batch_size, cell.output_size]`.
-        In case of Bidirectional RNN, this will be a `Tensor` shaped:
-            `[batch_size, cell_fw.output_size + cell_bw.output_size]`.
-    """
-    hidden_size = inputs.shape[2].value  # D value - hidden size of the RNN layer
+    # inputs = (batch, seq_len, hidden)
+    # attention_size = scalar(int)
+    hidden_size = inputs.shape[2].value  # hidden size of the RNN layer
 
     # Trainable parameters
-    w_omega = tf.get_variable("w_omega", [hidden_size, attention_size], initializer=tf.contrib.layers.xavier_initializer())
-    b_omega = tf.get_variable("b_omega", [attention_size], initializer=tf.contrib.layers.xavier_initializer())
-    u_omega = tf.get_variable("u_omega", [attention_size], initializer=tf.contrib.layers.xavier_initializer())
+    w_omega = tf.get_variable("w_omega", [hidden_size, attention_size], initializer=initializer)
+    b_omega = tf.get_variable("b_omega", [attention_size], initializer=initializer)
+    u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer)
 
     with tf.name_scope('v'):
-        # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
-        #  the shape of `v` is (B,T,D)*(D,A)=(B,T,A), where A=attention_size
-        v = tf.tanh(tf.tensordot(inputs, w_omega, axes=1) + b_omega)
+        v = tf.tanh(tf.tensordot(inputs, w_omega, axes=1) + b_omega)  # (batch, seq_len, attn_size)
 
-    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
-    vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (B,T) shape
-    alphas = tf.nn.softmax(vu, name='alphas')  # (B,T) shape
+    vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
+    alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
-    # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
-    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
+    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)  # (batch, hidden)
 
     return output, alphas
 
 
 def attention_with_no_size(inputs):
+    # inputs = (batch, seq_len, hidden)
     hidden_size = inputs.shape[2].value
-    u_omega = tf.get_variable("u_omega", [hidden_size], initializer=tf.contrib.layers.xavier_initializer())
+    u_omega = tf.get_variable("u_omega", [hidden_size], initializer=initializer)
     with tf.name_scope('v'):
-        v = tf.tanh(inputs)
+        v = tf.tanh(inputs)  # (batch, seq_len, hidden)
 
-    vu = tf.tensordot(v, u_omega, axes=1, name='vu')
-    alphas = tf.nn.softmax(vu, name='alphas')
-    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
+    vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
+    alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
+    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)  # (batch, hidden)
 
     return output, alphas
 
 
-def attention_with_relation(inputs, e1, e2, attention_size):
-    seq_len = tf.shape(inputs)[1]
-    hidden_size = inputs.shape[2].value  # D value - hidden size of the RNN layer
+def attention_with_relation(inputs, e1, e2, d1, d2, attention_size):
+    # inputs = (batch, seq_len, hidden)
+    # e1, e2 = (batch, seq_len)
+    # d1, d2 = (batch, seq_len, dist_emb_size)
+    # attention_size = scalar(int)
+    seq_len = tf.shape(inputs)[1]  # fixed at run-time
 
+    h = tf.layers.dense(inputs, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, seq_len, attn_size)
+    d1_h = tf.layers.dense(d1, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, seq_len, attn_size)
+    d2_h = tf.layers.dense(d2, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, seq_len, attn_size)
     with tf.name_scope('v'):
-        # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
-        #  the shape of `v` is (B,T,D)*(D,A)=(B,T,A), where A=attention_size
-        v = tf.tanh(inputs)
+        v = tf.tanh(h + d1_h + d2_h)  # (batch, seq_len, attn_size)
 
-    # Trainable parameters
+    # Latent Relation Variable based on Entities
     e1_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e1)[0]), axis=-1), tf.expand_dims(e1, axis=-1)], axis=-1)
-    e1_h = tf.gather_nd(v, e1_idx)
+    _e1_h = tf.gather_nd(inputs, e1_idx)  # (batch, hidden)
     e2_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e2)[0]), axis=-1), tf.expand_dims(e2, axis=-1)], axis=-1)
-    e2_h = tf.gather_nd(v, e2_idx)
-    e = tf.concat([e1_h, e2_h], axis=-1)
-    u_omega = tf.layers.dense(e, hidden_size, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    _e2_h = tf.gather_nd(inputs, e2_idx)  # (batch, hidden)
+    e1_type, e2_type = latent_type_attention(_e1_h, _e2_h, num_type=3)  # (batch, hidden)
+    e1_h = tf.concat([_e1_h, e1_type], axis=-1)  # (batch, 2*hidden)
+    e2_h = tf.concat([_e2_h, e2_type], axis=-1)  # (batch, 2*hidden)
 
-    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
-    vu = tf.matmul(v, tf.expand_dims(u_omega, -1))
-    vu = tf.reshape(vu, [-1, seq_len], name='vu')
-    alphas = tf.nn.softmax(vu, name='alphas')  # (B,T) shape
+    # subtract after linear transform
+    e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, attn_size)
+    e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, attn_size)
+    u_omega = tf.tanh(tf.subtract(e1_h, e2_h))  # (batch, attn_size)
 
-    # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
-    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)
+    vu = tf.matmul(v, tf.expand_dims(u_omega, axis=-1))  # (batch, seq_len, 1)
+    vu = tf.reshape(vu, [-1, seq_len])  # (batch, seq_len)
+    alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
+
+    output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)  # (batch, hidden)
 
     return output, alphas
 
 
-def entity_attention(inputs, e1, e2, attention_size):
-    attn = tf.layers.dense(inputs, attention_size, activation=tf.tanh,
-                           kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
+def latent_type_attention(e1, e2, num_type=3):
+    hidden_size = e1.shape[1].value
+    # Latent Entity Type Vectors
+    latentT = tf.get_variable("latentT", shape=[num_type, hidden_size], initializer=initializer)
 
-    e1_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e1)[0]), axis=-1), tf.expand_dims(e1, axis=-1)], axis=-1)
-    e1_h = tf.gather_nd(attn, e1_idx)
-    e2_idx = tf.concat([tf.expand_dims(tf.range(tf.shape(e2)[0]), axis=-1), tf.expand_dims(e2, axis=-1)], axis=-1)
-    e2_h = tf.gather_nd(attn, e2_idx)
-    e1_type, e2_type = latent_type_attention(e1_h, e2_h, num_type=3, latent_size=attention_size)
+    e1_sim = tf.matmul(e1, tf.transpose(latentT))  # (batch, num_type)
+    e1_alphas = tf.nn.softmax(e1_sim, name='e1_alphas')  # (batch, num_type)
+    e1_type = tf.matmul(e1_alphas, latentT, name='e1_type')  # (batch, hidden)
 
-    e1_expand = tf.expand_dims(e1_h+e1_type, axis=-1)
-    e2_expand = tf.expand_dims(e2_h+e2_type, axis=-1)
-    e = tf.concat([e1_expand, e2_expand], axis=-1)
-
-    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
-    ve = tf.matmul(attn, e, name='ve')  # (B,T,2) shape
-    alphas = tf.nn.softmax(ve, name='alphas')  # (B,T,2) shape
-
-    # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
-    output = tf.matmul(alphas, tf.transpose(e, [0, 2, 1]))
-
-    # Normalize
-    output = layer_norm(output)  # (N, T_q, C)
-
-    return output
-
-
-def latent_type_attention(e1, e2, num_type, latent_size):
-    latentT = tf.get_variable("latentT", shape=[num_type, latent_size], initializer=tf.contrib.layers.xavier_initializer())
-
-    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
-    e1_sim = tf.tanh(tf.matmul(e1, tf.transpose(latentT), name='e1_sim'))  # (B,3) shape
-    e1_alphas = tf.nn.softmax(e1_sim, name='e1_alphas')  # (B,3) shape
-    e1_type = tf.matmul(e1_alphas, latentT, name='e1_type')  # (B, latent_size)
-
-    # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
-    e2_sim = tf.tanh(tf.matmul(e2, tf.transpose(latentT), name='e2_sim'))  # (B,3) shape
-    e2_alphas = tf.nn.softmax(e2_sim, name='e2_alphas')  # (B,3) shape
-    e2_type = tf.matmul(e2_alphas, latentT, name='e2_type')  # (B, latent_size)
-
-    # # # Normalize
-    e1_type = layer_norm(e1_type)  # (N, T_q, C)
-    e2_type = layer_norm(e2_type)  # (N, T_q, C)
+    e2_sim = tf.matmul(e2, tf.transpose(latentT))  # (batch, num_type)
+    e2_alphas = tf.nn.softmax(e2_sim, name='e2_alphas')  # (batch, num_type)
+    e2_type = tf.matmul(e2_alphas, latentT, name='e2_type')  # (batch, hidden)
 
     return e1_type, e2_type
 
 
-def multihead_attention(queries,
-                        keys,
-                        num_units,
-                        num_heads,
-                        dropout_rate=0,
-                        scope="multihead_attention",
-                        reuse=None):
-    '''Applies multihead attention.
-
-    Args:
-      queries: A 3d tensor with shape of [N, T_q, C_q].
-      keys: A 3d tensor with shape of [N, T_k, C_k].
-      num_units: A scalar. Attention size.
-      dropout_rate: A floating point number.
-      num_heads: An int. Number of heads.
-      scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
-
-    Returns
-      A 3d tensor with shape of (N, T_q, C)
-    '''
+def multihead_attention(queries, keys, num_units, num_heads,
+                        dropout_rate=0, scope="multihead_attention", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         # Linear projections
-        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu,
-                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
-        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
-                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
-        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
-                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
+        Q = tf.layers.dense(queries, num_units, kernel_initializer=initializer)  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, kernel_initializer=initializer)  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, kernel_initializer=initializer)  # (N, T_k, C)
 
         # Split and concat
         Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
@@ -215,38 +146,13 @@ def multihead_attention(queries,
     return outputs
 
 
-def relative_multihead_attention(queries,
-                                 keys,
-                                 num_units,
-                                 num_heads,
-                                 clip_k,
-                                 seq_len,
-                                 dropout_rate=0,
-                                 scope="relative_multihead_attention",
-                                 reuse=None):
-    '''Applies multihead attention.
-
-    Args:
-      queries: A 3d tensor with shape of [N, T_q, C_q].
-      keys: A 3d tensor with shape of [N, T_k, C_k].
-      num_units: A scalar. Attention size.
-      dropout_rate: A floating point number.
-      num_heads: An int. Number of heads.
-      scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
-
-    Returns
-      A 3d tensor with shape of (N, T_q, C)
-    '''
+def relative_multihead_attention(queries, keys, num_units, num_heads,
+                                 clip_k, seq_len, dropout_rate=0, scope="relative_multihead_attention", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         # Linear projections
-        Q = tf.layers.dense(queries, num_units, activation=tf.nn.relu,
-                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_q, C)
-        K = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
-                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
-        V = tf.layers.dense(keys, num_units, activation=tf.nn.relu,
-                            kernel_initializer=tf.contrib.layers.xavier_initializer())  # (N, T_k, C)
+        Q = tf.layers.dense(queries, num_units, kernel_initializer=initializer)  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, kernel_initializer=initializer)  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, kernel_initializer=initializer)  # (N, T_k, C)
 
         # Split and concat
         Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
@@ -268,9 +174,9 @@ def relative_multihead_attention(queries,
 
         # Relative Position Embedding
         with tf.device('/cpu:0'), tf.variable_scope("relative-pos-embeddings"):
-            WK = tf.get_variable("WK", [2*clip_k+2, num_units//num_heads], initializer=tf.contrib.layers.xavier_initializer())
+            WK = tf.get_variable("WK", [2*clip_k+2, num_units//num_heads], initializer=initializer)
             aK = tf.nn.embedding_lookup(WK, dist)
-            WV = tf.get_variable("WV", [2*clip_k+2, num_units//num_heads], initializer=tf.contrib.layers.xavier_initializer())
+            WV = tf.get_variable("WV", [2*clip_k+2, num_units//num_heads], initializer=initializer)
             aV = tf.nn.embedding_lookup(WV, dist)
 
         # Multiplication
@@ -322,57 +228,7 @@ def relative_multihead_attention(queries,
     return outputs
 
 
-def feedforward(inputs,
-                num_units=[2000, 1024],
-                scope="feedforward",
-                reuse=None):
-    '''Point-wise feed forward net.
-    Args:
-      inputs: A 3d tensor with shape of [N, T, C].
-      num_units: A list of two integers.
-      scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
-    Returns:
-      A 3d tensor with the same shape and dtype as inputs
-    '''
-    with tf.variable_scope(scope, reuse=reuse):
-        # Inner layer
-        params = {"inputs": inputs, "filters": num_units[0], "kernel_size": 1,
-                  "activation": tf.nn.relu, "use_bias": True}
-        outputs = tf.layers.conv1d(**params)
-
-        # Readout layer
-        params = {"inputs": outputs, "filters": num_units[1], "kernel_size": 1,
-                  "activation": None, "use_bias": True}
-        outputs = tf.layers.conv1d(**params)
-
-        # Residual connection
-        outputs += inputs
-
-        # Normalize
-        outputs = layer_norm(outputs)
-
-    return outputs
-
-
-def layer_norm(inputs,
-               epsilon=1e-8,
-               scope="ln",
-               reuse=None):
-    '''Applies layer normalization.
-
-    Args:
-      inputs: A tensor with 2 or more dimensions, where the first dimension has
-        `batch_size`.
-      epsilon: A floating number. A very small number for preventing ZeroDivision Error.
-      scope: Optional scope for `variable_scope`.
-      reuse: Boolean, whether to reuse the weights of a previous layer
-        by the same name.
-
-    Returns:
-      A tensor with the same shape and data dtype as `inputs`.
-    '''
+def layer_norm(inputs, epsilon=1e-8, scope="ln", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         inputs_shape = inputs.get_shape()
         params_shape = inputs_shape[-1:]

@@ -1,7 +1,6 @@
 import tensorflow as tf
 import tensorflow_hub as hub
-from model.attention import attention_with_latent_var, attention_with_no_size, multihead_attention, entity_attention, \
-    relative_multihead_attention, latent_type_attention, attention_with_relation
+from model.attention import multihead_attention, relative_multihead_attention, attention_with_relation, layer_norm
 
 
 class SelfAttentiveLSTM:
@@ -21,7 +20,7 @@ class SelfAttentiveLSTM:
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
 
-        initializer = tf.contrib.layers.xavier_initializer()
+        initializer = tf.keras.initializers.glorot_normal()
         text_length = self._length(self.input_x)
 
         if use_elmo:
@@ -34,11 +33,12 @@ class SelfAttentiveLSTM:
                 self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -0.25, 0.25), name="W_text")
                 self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
 
-        # with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
-        #     self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
-        #     self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
-        #     self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)
-        #
+        with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
+            self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
+            self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
+            self.d1 = self.d1[:tf.shape(self.embedded_chars)[1], :tf.shape(self.embedded_chars)[1]]
+            self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)
+            self.d2 = self.d2[:tf.shape(self.embedded_chars)[1], :tf.shape(self.embedded_chars)[1]]
         #     self.embedded_chars = tf.concat([self.embedded_chars,
         #                                      self.d1[:, :tf.shape(self.embedded_chars)[1]],
         #                                      self.d2[:, :tf.shape(self.embedded_chars)[1]]], axis=-1)
@@ -54,52 +54,35 @@ class SelfAttentiveLSTM:
             #                                              num_units=embedding_size, num_heads=num_heads,
             #                                              clip_k=clip_k, seq_len=sequence_length)
 
-        with tf.variable_scope("bi-rnn-1"):
-            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
+        with tf.variable_scope("bi-rnn"):
+            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer)
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
-            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
+            fw_init = _fw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
+            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer)
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
-            self.rnn_outputs1, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
-                                                                   cell_bw=bw_cell,
-                                                                   inputs=self.self_att,
-                                                                   sequence_length=text_length,
-                                                                   dtype=tf.float32)
-            self.rnn_outputs1_concat = tf.concat(self.rnn_outputs1, axis=-1)
-            # self.rnn_outputs1_add = tf.add(self.rnn_outputs1[0], self.rnn_outputs1[1])
+            bw_init = _bw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
+            self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
+                                                                  cell_bw=bw_cell,
+                                                                  inputs=self.self_att,
+                                                                  initial_state_fw=fw_init,
+                                                                  initial_state_bw=bw_init,
+                                                                  sequence_length=text_length,
+                                                                  dtype=tf.float32)
+            self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)
+            # self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
 
-        with tf.variable_scope('batch-norm-1'):
-            self.rnn_outputs1_concat = tf.layers.batch_normalization(self.rnn_outputs1_concat)
-
-        with tf.variable_scope("entity-attention"):
-            self.entity_att = entity_attention(self.rnn_outputs1_concat, self.input_e1, self.input_e2,
-                                               attention_size=attention_size*2)
-            self.entity_att = tf.concat([self.rnn_outputs1_concat, self.entity_att], axis=-1)
-
-        with tf.variable_scope("bi-rnn-2"):
-            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
-            fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
-            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size)
-            bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
-            self.rnn_outputs2, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
-                                                                   cell_bw=bw_cell,
-                                                                   inputs=self.entity_att,
-                                                                   sequence_length=text_length,
-                                                                   dtype=tf.float32)
-            self.rnn_outputs2_concat = tf.concat(self.rnn_outputs2, axis=-1)
-            # self.rnn_outputs2_add = tf.add(self.rnn_outputs2[0], self.rnn_outputs2[1])
-
-        with tf.variable_scope('batch-norm-2'):
-            self.rnn_outputs2_concat = tf.layers.batch_normalization(self.rnn_outputs2_concat)
+        with tf.variable_scope('batch-norm'):
+            self.rnn_outputs = tf.layers.batch_normalization(self.rnn_outputs)
 
         # Attention layer
         # with tf.variable_scope('attention-with-latent-var'):
-        #     self.att_output, self.alphas = attention_with_latent_var(self.rnn_outputs_concat, attention_size)
+        #     self.att_output, self.alphas = attention_with_latent_var(self.rnn_outputs, attention_size)
         # with tf.variable_scope('attention-with-no-size'):
-        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs_add)
+        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs)
         with tf.variable_scope('attention-with-relation'):
-            self.att_output, self.alphas = attention_with_relation(self.rnn_outputs2_concat,
-                                                                   self.input_e1,
-                                                                   self.input_e2,
+            self.att_output, self.alphas = attention_with_relation(self.rnn_outputs,
+                                                                   self.input_e1, self.input_e2,
+                                                                   self.d1, self.d2,
                                                                    attention_size=attention_size)
 
         # Dropout
