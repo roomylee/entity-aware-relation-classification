@@ -122,9 +122,6 @@ def get_relative_distance(df, max_sentence_length):
         for word_idx in range(len(tokens)):
             d1 += str((max_sentence_length - 1) + word_idx - e1) + " "
             d2 += str((max_sentence_length - 1) + word_idx - e2) + " "
-        for _ in range(max_sentence_length - len(tokens)):
-            d1 += "999 "
-            d2 += "999 "
         pos1.append(d1)
         pos2.append(d2)
 

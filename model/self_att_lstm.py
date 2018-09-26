@@ -35,13 +35,9 @@ class SelfAttentiveLSTM:
 
         with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
             self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
-            self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)
-            self.d1 = self.d1[:tf.shape(self.embedded_chars)[1], :tf.shape(self.embedded_chars)[1]]
-            self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)
-            self.d2 = self.d2[:tf.shape(self.embedded_chars)[1], :tf.shape(self.embedded_chars)[1]]
-        #     self.embedded_chars = tf.concat([self.embedded_chars,
-        #                                      self.d1[:, :tf.shape(self.embedded_chars)[1]],
-        #                                      self.d2[:, :tf.shape(self.embedded_chars)[1]]], axis=-1)
+            self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)[:, :tf.shape(self.embedded_chars)[1]]
+            self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)[:, :tf.shape(self.embedded_chars)[1]]
+        #     self.embedded_chars = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
         #     embedding_size = embedding_size + 2 * dist_embedding_size
 
         with tf.variable_scope('dropout-embeddings'):
@@ -70,9 +66,6 @@ class SelfAttentiveLSTM:
                                                                   dtype=tf.float32)
             self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)
             # self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
-
-        with tf.variable_scope('batch-norm'):
-            self.rnn_outputs = tf.layers.batch_normalization(self.rnn_outputs)
 
         # Attention layer
         # with tf.variable_scope('attention-with-latent-var'):
