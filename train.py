@@ -112,9 +112,9 @@ def train():
             sess.run(tf.global_variables_initializer())
 
             if FLAGS.embeddings == "worp2vec":
-                pretrain_W = utils.load_worp2vec('resource/GoogleNews-vectors-negative300.bin', FLAGS.embedding_size, vocab_processor)
+                pretrain_W = utils.load_word2vec('resource/GoogleNews-vectors-negative300.bin', FLAGS.embedding_size, vocab_processor)
                 sess.run(model.W_text.assign(pretrain_W))
-                print("Success to load pre-trained worp2vec model!\n")
+                print("Success to load pre-trained word2vec model!\n")
             elif FLAGS.embeddings == "glove100":
                 pretrain_W = utils.load_glove('resource/glove.6B.100d.txt', FLAGS.embedding_size, vocab_processor)
                 sess.run(model.W_text.assign(pretrain_W))
