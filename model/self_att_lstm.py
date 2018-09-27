@@ -1,12 +1,12 @@
 import tensorflow as tf
 import tensorflow_hub as hub
-from model.attention import multihead_attention, relative_multihead_attention, attention_with_relation, layer_norm
+from model.attention import multihead_attention, attention
 
 
 class SelfAttentiveLSTM:
     def __init__(self, sequence_length, num_classes,
-                 vocab_size, embedding_size, dist_vocab_size, dist_embedding_size,
-                 hidden_size, clip_k, num_heads, attention_size,
+                 vocab_size, embedding_size, pos_vocab_size, pos_embedding_size,
+                 hidden_size, num_heads, attention_size,
                  use_elmo=False, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_x')
@@ -14,8 +14,8 @@ class SelfAttentiveLSTM:
         self.input_text = tf.placeholder(tf.string, shape=[None, ], name='input_text')
         self.input_e1 = tf.placeholder(tf.int32, shape=[None, ], name='input_e1')
         self.input_e2 = tf.placeholder(tf.int32, shape=[None, ], name='input_e2')
-        self.input_d1 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_d1')
-        self.input_d2 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_d2')
+        self.input_p1 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_p1')
+        self.input_p2 = tf.placeholder(tf.int32, shape=[None, sequence_length], name='input_p2')
         self.emb_dropout_keep_prob = tf.placeholder(tf.float32, name='emb_dropout_keep_prob')
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
@@ -24,33 +24,33 @@ class SelfAttentiveLSTM:
         text_length = self._length(self.input_x)
 
         if use_elmo:
+            # Contextual Embedding Layer
             with tf.variable_scope("elmo-embeddings"):
                 elmo_model = hub.Module("https://tfhub.dev/google/elmo/2", trainable=True)
                 self.embedded_chars = elmo_model(self.input_text, signature="default", as_dict=True)["elmo"]
         else:
-            # Embedding layer
+            # Word Embedding Layer
             with tf.device('/cpu:0'), tf.variable_scope("word-embeddings"):
                 self.W_text = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -0.25, 0.25), name="W_text")
                 self.embedded_chars = tf.nn.embedding_lookup(self.W_text, self.input_x)
 
+        # Position Embedding Layer
         with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
-            self.W_dist = tf.get_variable("W_dist", [dist_vocab_size, dist_embedding_size], initializer=initializer)
-            self.d1 = tf.nn.embedding_lookup(self.W_dist, self.input_d1)[:, :tf.shape(self.embedded_chars)[1]]
-            self.d2 = tf.nn.embedding_lookup(self.W_dist, self.input_d2)[:, :tf.shape(self.embedded_chars)[1]]
-        #     self.embedded_chars = tf.concat([self.embedded_chars, self.d1, self.d2], axis=-1)
-        #     embedding_size = embedding_size + 2 * dist_embedding_size
+            self.W_pos = tf.get_variable("W_pos", [pos_vocab_size, pos_embedding_size], initializer=initializer)
+            self.p1 = tf.nn.embedding_lookup(self.W_pos, self.input_p1)[:, :tf.shape(self.embedded_chars)[1]]
+            self.p2 = tf.nn.embedding_lookup(self.W_pos, self.input_p2)[:, :tf.shape(self.embedded_chars)[1]]
 
+        # Dropout for Word Embedding
         with tf.variable_scope('dropout-embeddings'):
             self.embedded_chars = tf.nn.dropout(self.embedded_chars,  self.emb_dropout_keep_prob)
 
+        # Self Attention
         with tf.variable_scope("self-attention"):
             self.self_att = multihead_attention(self.embedded_chars, self.embedded_chars,
                                                 num_units=embedding_size, num_heads=num_heads)
-            # self.self_att = relative_multihead_attention(self.embedded_chars, self.embedded_chars,
-            #                                              num_units=embedding_size, num_heads=num_heads,
-            #                                              clip_k=clip_k, seq_len=sequence_length)
 
-        with tf.variable_scope("bi-rnn"):
+        # Bidirectional LSTM
+        with tf.variable_scope("bi-lstm"):
             _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer)
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
             fw_init = _fw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
@@ -65,22 +65,17 @@ class SelfAttentiveLSTM:
                                                                   sequence_length=text_length,
                                                                   dtype=tf.float32)
             self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)
-            # self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
 
-        # Attention layer
-        # with tf.variable_scope('attention-with-latent-var'):
-        #     self.att_output, self.alphas = attention_with_latent_var(self.rnn_outputs, attention_size)
-        # with tf.variable_scope('attention-with-no-size'):
-        #     self.att_output, self.alphas = attention_with_no_size(self.rnn_outputs)
-        with tf.variable_scope('attention-with-relation'):
-            self.att_output, self.alphas = attention_with_relation(self.rnn_outputs,
-                                                                   self.input_e1, self.input_e2,
-                                                                   self.d1, self.d2,
-                                                                   attention_size=attention_size)
+        # Attention
+        with tf.variable_scope('attention'):
+            self.attn, self.alphas = attention(self.rnn_outputs,
+                                               self.input_e1, self.input_e2,
+                                               self.p1, self.p2,
+                                               attention_size=attention_size)
 
         # Dropout
         with tf.variable_scope('dropout'):
-            self.h_drop = tf.nn.dropout(self.att_output, self.dropout_keep_prob)
+            self.h_drop = tf.nn.dropout(self.attn, self.dropout_keep_prob)
 
         # Fully connected layer
         with tf.variable_scope('output'):

@@ -1,6 +1,3 @@
-import os
-import subprocess
-
 import numpy as np
 
 class2label = {'Other': 0,
@@ -28,7 +25,6 @@ label2class = {0: 'Other',
 
 def load_word2vec(word2vec_path, embedding_dim, vocab):
     # initial matrix with random uniform
-    # initW = np.random.uniform(-0.25, 0.25, (len(vocab.vocabulary_), embedding_dim))
     initW = np.random.randn(len(vocab.vocabulary_), embedding_dim) / np.sqrt(embedding_dim/2)
     # load any vectors from the word2vec
     print("Load word2vec file {0}".format(word2vec_path))
@@ -55,7 +51,6 @@ def load_word2vec(word2vec_path, embedding_dim, vocab):
 
 def load_glove(word2vec_path, embedding_dim, vocab):
     # initial matrix with random uniform
-    # initW = np.random.uniform(-0.25, 0.25, (len(vocab.vocabulary_), embedding_dim))
     initW = np.random.randn(len(vocab.vocabulary_), embedding_dim) / np.sqrt(embedding_dim / 2)
     # load any vectors from the word2vec
     print("Load glove file {0}".format(word2vec_path))

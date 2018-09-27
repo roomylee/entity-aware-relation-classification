@@ -75,7 +75,7 @@ def load_data_and_labels(path):
 
     df = pd.DataFrame(data=data, columns=["id", "sentence", "e1", "e2", "relation"])
 
-    dist1, dist2 = get_relative_distance(df, FLAGS.max_sentence_length)
+    pos1, pos2 = get_relative_position(df, FLAGS.max_sentence_length)
 
     df['label'] = [utils.class2label[r] for r in df['relation']]
 
@@ -104,10 +104,10 @@ def load_data_and_labels(path):
     labels = dense_to_one_hot(labels_flat, labels_count)
     labels = labels.astype(np.uint8)
 
-    return x_text, labels, e1, e2, dist1, dist2
+    return x_text, labels, e1, e2, pos1, pos2
 
 
-def get_relative_distance(df, max_sentence_length):
+def get_relative_position(df, max_sentence_length):
     # Position data
     pos1 = []
     pos2 = []
@@ -117,13 +117,13 @@ def get_relative_distance(df, max_sentence_length):
         e1 = df.iloc[df_idx]['e1']
         e2 = df.iloc[df_idx]['e2']
 
-        d1 = ""
-        d2 = ""
+        p1 = ""
+        p2 = ""
         for word_idx in range(len(tokens)):
-            d1 += str((max_sentence_length - 1) + word_idx - e1) + " "
-            d2 += str((max_sentence_length - 1) + word_idx - e2) + " "
-        pos1.append(d1)
-        pos2.append(d2)
+            p1 += str((max_sentence_length - 1) + word_idx - e1) + " "
+            p2 += str((max_sentence_length - 1) + word_idx - e2) + " "
+        pos1.append(p1)
+        pos2.append(p2)
 
     return pos1, pos2
 

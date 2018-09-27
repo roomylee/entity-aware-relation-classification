@@ -4,7 +4,7 @@ import datetime
 
 from configure import FLAGS
 import utils
-import re
+
 
 class Logger:
     def __init__(self, out_dir):

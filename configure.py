@@ -22,7 +22,7 @@ def parse_args():
                         type=str, help="Embeddings {'word2vec', 'glove100', 'glove300', 'elmo'}")
     parser.add_argument("--embedding_size", default=300,
                         type=int, help="Dimensionality of word embedding (default: 300)")
-    parser.add_argument("--dist_embedding_size", default=50,
+    parser.add_argument("--pos_embedding_size", default=50,
                         type=int, help="Dimensionality of relative distance embedding (default: 50)")
     parser.add_argument("--emb_dropout_keep_prob", default=0.7,
                         type=float, help="Dropout keep probability of embedding layer (default: 0.7)")
@@ -34,8 +34,6 @@ def parse_args():
     # Attention
     parser.add_argument("--num_heads", default=4,
                         type=int, help="Number of heads in multi-head attention (default: 4)")
-    parser.add_argument("--clip_k", default=2,
-                        type=int, help="Size of clipping the relative position (default: 2)")
     parser.add_argument("--attention_size", default=50,
                         type=int, help="Dimensionality of attention (default: 50)")
     # Misc
@@ -57,8 +55,10 @@ def parse_args():
                         type=int, help="Evaluate model on dev set after this many steps (default: 100)")
     parser.add_argument("--num_checkpoints", default=5,
                         type=int, help="Number of checkpoints to store (default: 5)")
-    parser.add_argument("--learning_rate", default=1e-3,
-                        type=float, help="Which learning rate to start with (Default: 1e-3)")
+    parser.add_argument("--learning_rate", default=1.0,
+                        type=float, help="Which learning rate to start with (Default: 1.0)")
+    parser.add_argument("--decay_rate", default=0.9,
+                        type=float, help="Decay rate for learning rate (Default: 0.9)")
 
     # Misc Parameters
     parser.add_argument("--allow_soft_placement", default=True,
