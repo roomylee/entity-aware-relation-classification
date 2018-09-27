@@ -90,7 +90,6 @@ class SelfAttentiveLSTM:
         # Calculate mean cross-entropy loss
         with tf.variable_scope("loss"):
             losses = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.logits, labels=self.input_y)
-            # losses = self.ranking_loss(self.logits, self.input_y)
             self.l2 = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables()])
             self.loss = tf.reduce_mean(losses) + l2_reg_lambda * self.l2
 
@@ -106,32 +105,3 @@ class SelfAttentiveLSTM:
         length = tf.reduce_sum(relevant, reduction_indices=1)
         length = tf.cast(length, tf.int32)
         return length
-
-    @staticmethod
-    def ranking_loss(logits, input_y, gamma=1.0, margin_pos=2.5, margin_neg=-0.5):
-        labels = tf.argmax(input_y, 1, output_type=tf.int32)
-
-        gamma = tf.constant(gamma)  # lambda
-        mp = tf.constant(margin_pos)
-        mn = tf.constant(margin_neg)
-
-        L = tf.constant(0.0)
-        i = tf.constant(0)
-        cond = lambda i, L: tf.less(i, tf.shape(labels)[0])
-
-        def loop_body(i, L):
-            pos_label = labels[i]  # positive class label index
-            # taking most informative negative class, use 2nd argmax
-            _, neg_indices = tf.nn.top_k(logits[i], k=2)
-            max_neg_index = tf.cond(tf.equal(pos_label, neg_indices[0]),
-                                    lambda: neg_indices[1], lambda: neg_indices[0])
-
-            s_pos = logits[i, pos_label]  # score for gold class
-            s_neg = logits[i, max_neg_index]  # score for negative class
-
-            l = tf.log((1.0 + tf.exp((gamma * (mp - s_pos))))) + tf.log((1.0 + tf.exp((gamma * (mn + s_neg)))))
-
-            return [tf.add(i, 1), tf.add(L, l)]
-
-        _, L = tf.while_loop(cond, loop_body, loop_vars=[i, L])
-        return L
