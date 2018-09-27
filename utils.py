@@ -1,3 +1,4 @@
+import tensorflow as tf
 import numpy as np
 
 class2label = {'Other': 0,
@@ -21,6 +22,10 @@ label2class = {0: 'Other',
                13: 'Entity-Origin(e1,e2)', 14: 'Entity-Origin(e2,e1)',
                15: 'Member-Collection(e1,e2)', 16: 'Member-Collection(e2,e1)',
                17: 'Content-Container(e1,e2)', 18: 'Content-Container(e2,e1)'}
+
+
+def initializer():
+    return tf.keras.initializers.glorot_normal()
 
 
 def load_word2vec(word2vec_path, embedding_dim, vocab):

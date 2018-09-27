@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-initializer = tf.keras.initializers.glorot_normal()
+from utils import initializer
 
 
 def attention(inputs, e1, e2, p1, p2, attention_size):
@@ -27,24 +27,24 @@ def attention(inputs, e1, e2, p1, p2, attention_size):
     # e2_h = tf.add(_e2_h, e2_type)  # (batch, hidden)
 
     # # v*tanh(Wh+Wd1+Wd2+W(e2-e1))
-    # h = tf.layers.dense(inputs, attention_size, kernel_initializer=initializer)
-    # d1_h = tf.layers.dense(d1, attention_size, kernel_initializer=initializer)
-    # d2_h = tf.layers.dense(d2, attention_size, kernel_initializer=initializer)
-    # e_h = tf.layers.dense(tf.subtract(e2_h, e1_h), attention_size, kernel_initializer=initializer)
+    # h = tf.layers.dense(inputs, attention_size, kernel_initializer=initializer())
+    # d1_h = tf.layers.dense(d1, attention_size, kernel_initializer=initializer())
+    # d2_h = tf.layers.dense(d2, attention_size, kernel_initializer=initializer())
+    # e_h = tf.layers.dense(tf.subtract(e2_h, e1_h), attention_size, kernel_initializer=initializer())
     # e_h = tf.reshape(tf.tile(e_h, [1, seq_len]), [-1, seq_len, attention_size])
     # v = tf.tanh(tf.add_n([h, d1_h, d2_h, e_h]))
     #
-    # u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer)
+    # u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer())
     # vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
     # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
     # # v*tanh(W*[h;d1;d2]+W*[e1;e2])
-    # e_h = tf.layers.dense(tf.concat([e1_h, e2_h], -1), attention_size, kernel_initializer=initializer)
+    # e_h = tf.layers.dense(tf.concat([e1_h, e2_h], -1), attention_size, kernel_initializer=initializer())
     # e_h = tf.reshape(tf.tile(e_h, [1, seq_len]), [-1, seq_len, attention_size])
-    # v = tf.layers.dense(tf.concat([inputs, d1, d2], axis=-1), attention_size, kernel_initializer=initializer)
+    # v = tf.layers.dense(tf.concat([inputs, d1, d2], axis=-1), attention_size, kernel_initializer=initializer())
     # v = tf.tanh(tf.add(v, e_h))
     #
-    # u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer)
+    # u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer())
     # vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
     # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
@@ -52,33 +52,33 @@ def attention(inputs, e1, e2, p1, p2, attention_size):
     e1_h = tf.reshape(tf.tile(e1_h, [1, seq_len]), [-1, seq_len, hidden_size+latent_size])
     e2_h = tf.reshape(tf.tile(e2_h, [1, seq_len]), [-1, seq_len, hidden_size+latent_size])
     v = tf.concat([inputs, p1, p2, e1_h, e2_h], axis=-1)
-    v = tf.layers.dense(v, attention_size, activation=tf.tanh, kernel_initializer=initializer)
+    v = tf.layers.dense(v, attention_size, activation=tf.tanh, kernel_initializer=initializer())
 
-    u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer)
+    u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer())
     vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
     alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
     # # [h;d1;d2]*W*tanh(We2-We1)
-    # e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, attn_size)
-    # e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, attn_size)
+    # e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
+    # e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
     # v = tf.concat([inputs, d1, d2], axis=-1)  # (batch, seq_len, hidden + 2*dist_emb_size)
-    # v = tf.layers.dense(H, attention_size, kernel_initializer=initializer)  # (batch, seq_len, attn_size)
+    # v = tf.layers.dense(H, attention_size, kernel_initializer=initializer())  # (batch, seq_len, attn_size)
     #
     # u_omega = tf.layers.dense(tf.subtract(e2_h, e1_h), attention_size, activation=tf.tanh,
-    #                           kernel_initializer=initializer)  # (batch, attn_size)
+    #                           kernel_initializer=initializer())  # (batch, attn_size)
     # vu = tf.matmul(v, tf.expand_dims(u, axis=-1))  # (batch, seq_len, 1)
     # vu = tf.reshape(sim_e, [-1, seq_len])  # (batch, seq_len)
     # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
     # # tanh(We1-We2)*tanh(Wh+Wd1+Wd2)
     # h = tf.layers.dense(inputs, attention_size, use_bias=False,
-    #                     kernel_initializer=initializer)  # (batch, seq_len, attn_size)
+    #                     kernel_initializer=initializer())  # (batch, seq_len, attn_size)
     # d1_h = tf.layers.dense(d1, attention_size, use_bias=False,
-    #                        kernel_initializer=initializer)  # (batch, seq_len, attn_size)
+    #                        kernel_initializer=initializer())  # (batch, seq_len, attn_size)
     # d2_h = tf.layers.dense(d2, attention_size, use_bias=False,
-    #                        kernel_initializer=initializer)  # (batch, seq_len, attn_size)
-    # e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, attn_size)
-    # e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer)  # (batch, attn_size)
+    #                        kernel_initializer=initializer())  # (batch, seq_len, attn_size)
+    # e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
+    # e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
     # v = tf.tanh(h + d1_h + d2_h)  # (batch, seq_len, attn_size)
     #
     # u_omega = tf.tanh(tf.subtract(e1_h, e2_h))  # (batch, attn_size)
@@ -94,10 +94,10 @@ def attention(inputs, e1, e2, p1, p2, attention_size):
 
 def latent_type_attention(e1, e2, num_type=3, latent_size=50):
     # Latent Entity Type Vectors
-    latent_type = tf.get_variable("latent_type", shape=[num_type, latent_size], initializer=initializer)
+    latent_type = tf.get_variable("latent_type", shape=[num_type, latent_size], initializer=initializer())
 
-    # e1_h = tf.layers.dense(e1, latent_size, kernel_initializer=initializer)
-    # e2_h = tf.layers.dense(e2, latent_size, kernel_initializer=initializer)
+    # e1_h = tf.layers.dense(e1, latent_size, kernel_initializer=initializer())
+    # e2_h = tf.layers.dense(e2, latent_size, kernel_initializer=initializer())
 
     e1_sim = tf.matmul(e1, tf.transpose(latent_type))  # (batch, num_type)
     e1_alphas = tf.nn.softmax(e1_sim, name='e1_alphas')  # (batch, num_type)
@@ -114,9 +114,9 @@ def multihead_attention(queries, keys, num_units, num_heads,
                         dropout_rate=0, scope="multihead_attention", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         # Linear projections
-        Q = tf.layers.dense(queries, num_units, kernel_initializer=initializer)  # (N, T_q, C)
-        K = tf.layers.dense(keys, num_units, kernel_initializer=initializer)  # (N, T_k, C)
-        V = tf.layers.dense(keys, num_units, kernel_initializer=initializer)  # (N, T_k, C)
+        Q = tf.layers.dense(queries, num_units, kernel_initializer=initializer())  # (N, T_q, C)
+        K = tf.layers.dense(keys, num_units, kernel_initializer=initializer())  # (N, T_k, C)
+        V = tf.layers.dense(keys, num_units, kernel_initializer=initializer())  # (N, T_k, C)
 
         # Split and concat
         Q_ = tf.concat(tf.split(Q, num_heads, axis=2), axis=0)  # (h*N, T_q, C/h)
@@ -156,7 +156,7 @@ def multihead_attention(queries, keys, num_units, num_heads,
         outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
 
         # Linear
-        outputs = tf.layers.dense(outputs, num_units, activation=tf.nn.relu, kernel_initializer=initializer)
+        outputs = tf.layers.dense(outputs, num_units, activation=tf.nn.relu, kernel_initializer=initializer())
 
         # Residual connection
         outputs += queries

@@ -1,5 +1,7 @@
 import tensorflow as tf
 import tensorflow_hub as hub
+
+from utils import initializer
 from model.attention import multihead_attention, attention
 
 
@@ -20,9 +22,6 @@ class SelfAttentiveLSTM:
         self.rnn_dropout_keep_prob = tf.placeholder(tf.float32, name='rnn_dropout_keep_prob')
         self.dropout_keep_prob = tf.placeholder(tf.float32, name='dropout_keep_prob')
 
-        initializer = tf.keras.initializers.glorot_normal()
-        text_length = self._length(self.input_x)
-
         if use_elmo:
             # Contextual Embedding Layer
             with tf.variable_scope("elmo-embeddings"):
@@ -36,7 +35,7 @@ class SelfAttentiveLSTM:
 
         # Position Embedding Layer
         with tf.device('/cpu:0'), tf.variable_scope("position-embeddings"):
-            self.W_pos = tf.get_variable("W_pos", [pos_vocab_size, pos_embedding_size], initializer=initializer)
+            self.W_pos = tf.get_variable("W_pos", [pos_vocab_size, pos_embedding_size], initializer=initializer())
             self.p1 = tf.nn.embedding_lookup(self.W_pos, self.input_p1)[:, :tf.shape(self.embedded_chars)[1]]
             self.p2 = tf.nn.embedding_lookup(self.W_pos, self.input_p2)[:, :tf.shape(self.embedded_chars)[1]]
 
@@ -51,10 +50,10 @@ class SelfAttentiveLSTM:
 
         # Bidirectional LSTM
         with tf.variable_scope("bi-lstm"):
-            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer)
+            _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer())
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
             fw_init = _fw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
-            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer)
+            _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer())
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
             bw_init = _bw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
@@ -62,7 +61,7 @@ class SelfAttentiveLSTM:
                                                                   inputs=self.self_attn,
                                                                   initial_state_fw=fw_init,
                                                                   initial_state_bw=bw_init,
-                                                                  sequence_length=text_length,
+                                                                  sequence_length=self._length(self.input_x),
                                                                   dtype=tf.float32)
             self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)
             # self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
@@ -80,7 +79,7 @@ class SelfAttentiveLSTM:
 
         # Fully connected layer
         with tf.variable_scope('output'):
-            self.logits = tf.layers.dense(self.h_drop, num_classes, kernel_initializer=initializer)
+            self.logits = tf.layers.dense(self.h_drop, num_classes, kernel_initializer=initializer())
             self.predictions = tf.argmax(self.logits, 1, name="predictions")
 
         # Calculate mean cross-entropy loss
