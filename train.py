@@ -111,7 +111,7 @@ def train():
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
 
-            if FLAGS.embeddings == "worp2vec":
+            if FLAGS.embeddings == "word2vec":
                 pretrain_W = utils.load_word2vec('resource/GoogleNews-vectors-negative300.bin', FLAGS.embedding_size, vocab_processor)
                 sess.run(model.W_text.assign(pretrain_W))
                 print("Success to load pre-trained word2vec model!\n")
