@@ -25,7 +25,7 @@ label2class = {0: 'Other',
 
 def load_word2vec(word2vec_path, embedding_dim, vocab):
     # initial matrix with random uniform
-    initW = np.random.randn(len(vocab.vocabulary_), embedding_dim) / np.sqrt(embedding_dim/2)
+    initW = np.random.randn(len(vocab.vocabulary_), embedding_dim) / np.sqrt(embedding_dim / 2)
     # load any vectors from the word2vec
     print("Load word2vec file {0}".format(word2vec_path))
     with open(word2vec_path, "rb") as f:

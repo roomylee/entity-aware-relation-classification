@@ -46,8 +46,8 @@ class SelfAttentiveLSTM:
 
         # Self Attention
         with tf.variable_scope("self-attention"):
-            self.self_att = multihead_attention(self.embedded_chars, self.embedded_chars,
-                                                num_units=embedding_size, num_heads=num_heads)
+            self.self_attn = multihead_attention(self.embedded_chars, self.embedded_chars,
+                                                 num_units=embedding_size, num_heads=num_heads)
 
         # Bidirectional LSTM
         with tf.variable_scope("bi-lstm"):
@@ -59,12 +59,13 @@ class SelfAttentiveLSTM:
             bw_init = _bw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                                   cell_bw=bw_cell,
-                                                                  inputs=self.self_att,
+                                                                  inputs=self.self_attn,
                                                                   initial_state_fw=fw_init,
                                                                   initial_state_bw=bw_init,
                                                                   sequence_length=text_length,
                                                                   dtype=tf.float32)
             self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)
+            # self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
 
         # Attention
         with tf.variable_scope('attention'):
