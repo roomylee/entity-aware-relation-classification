@@ -96,19 +96,19 @@ def multihead_attention(queries, keys, num_units, num_heads,
         outputs = tf.where(tf.equal(key_masks, 0), paddings, outputs)  # (h*N, T_q, T_k)
 
         # Activation
-        outputs = tf.nn.softmax(outputs)  # (h*N, T_q, T_k)
+        alphas = tf.nn.softmax(outputs)  # (h*N, T_q, T_k)
 
         # Query Masking
         query_masks = tf.sign(tf.abs(tf.reduce_sum(queries, axis=-1)))  # (N, T_q)
         query_masks = tf.tile(query_masks, [num_heads, 1])  # (h*N, T_q)
         query_masks = tf.tile(tf.expand_dims(query_masks, -1), [1, 1, tf.shape(keys)[1]])  # (h*N, T_q, T_k)
-        outputs *= query_masks  # broadcasting. (N, T_q, C)
+        alphas *= query_masks  # broadcasting. (N, T_q, C)
 
         # Dropouts
-        outputs = tf.layers.dropout(outputs, rate=dropout_rate, training=tf.convert_to_tensor(True))
+        alphas = tf.layers.dropout(alphas, rate=dropout_rate, training=tf.convert_to_tensor(True))
 
         # Weighted sum
-        outputs = tf.matmul(outputs, V_)  # ( h*N, T_q, C/h)
+        outputs = tf.matmul(alphas, V_)  # ( h*N, T_q, C/h)
 
         # Restore shape
         outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)  # (N, T_q, C)
@@ -122,7 +122,7 @@ def multihead_attention(queries, keys, num_units, num_heads,
         # Normalize
         outputs = layer_norm(outputs)  # (N, T_q, C)
 
-    return outputs
+    return outputs, alphas
 
 
 def layer_norm(inputs, epsilon=1e-8, scope="layer_norm", reuse=None):

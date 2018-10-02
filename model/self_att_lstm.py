@@ -45,8 +45,8 @@ class SelfAttentiveLSTM:
 
         # Self Attention
         with tf.variable_scope("self-attention"):
-            self.self_attn = multihead_attention(self.embedded_chars, self.embedded_chars,
-                                                 num_units=embedding_size, num_heads=num_heads)
+            self.self_attn, self.self_alphas = multihead_attention(self.embedded_chars, self.embedded_chars,
+                                                                   num_units=embedding_size, num_heads=num_heads)
 
         # Bidirectional LSTM
         with tf.variable_scope("bi-lstm"):
@@ -60,7 +60,6 @@ class SelfAttentiveLSTM:
                                                                   sequence_length=self._length(self.input_x),
                                                                   dtype=tf.float32)
             self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)
-            # self.rnn_outputs = tf.add(self.rnn_outputs[0], self.rnn_outputs[1])
 
         # Attention
         with tf.variable_scope('attention'):
