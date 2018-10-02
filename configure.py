@@ -68,6 +68,10 @@ def parse_args():
     parser.add_argument("--gpu_allow_growth", default=True,
                         type=bool, help="Allow gpu memory growth")
 
+    # Visualization Parameters
+    parser.add_argument("--checkpoint_dir", default=None,
+                        type=str, help="Visualize this checkpoint")
+
     if len(sys.argv) == 0:
         parser.print_help()
         sys.exit(1)
