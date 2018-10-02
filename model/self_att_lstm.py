@@ -52,15 +52,11 @@ class SelfAttentiveLSTM:
         with tf.variable_scope("bi-lstm"):
             _fw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer())
             fw_cell = tf.nn.rnn_cell.DropoutWrapper(_fw_cell, self.rnn_dropout_keep_prob)
-            fw_init = _fw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
             _bw_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer())
             bw_cell = tf.nn.rnn_cell.DropoutWrapper(_bw_cell, self.rnn_dropout_keep_prob)
-            bw_init = _bw_cell.zero_state(tf.shape(self.input_x)[0], dtype=tf.float32)
             self.rnn_outputs, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=fw_cell,
                                                                   cell_bw=bw_cell,
                                                                   inputs=self.self_attn,
-                                                                  initial_state_fw=fw_init,
-                                                                  initial_state_bw=bw_init,
                                                                   sequence_length=self._length(self.input_x),
                                                                   dtype=tf.float32)
             self.rnn_outputs = tf.concat(self.rnn_outputs, axis=-1)

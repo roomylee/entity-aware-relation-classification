@@ -30,7 +30,7 @@ def initializer():
 
 def load_word2vec(word2vec_path, embedding_dim, vocab):
     # initial matrix with random uniform
-    initW = np.random.randn(len(vocab.vocabulary_), embedding_dim) / np.sqrt(embedding_dim)
+    initW = np.random.randn(len(vocab.vocabulary_), embedding_dim).astype(np.float32) * np.sqrt(2.0 / len(vocab.vocabulary_))
     # load any vectors from the word2vec
     print("Load word2vec file {0}".format(word2vec_path))
     with open(word2vec_path, "rb") as f:
@@ -56,7 +56,7 @@ def load_word2vec(word2vec_path, embedding_dim, vocab):
 
 def load_glove(word2vec_path, embedding_dim, vocab):
     # initial matrix with random uniform
-    initW = np.random.randn(len(vocab.vocabulary_), embedding_dim) / np.sqrt(embedding_dim)
+    initW = np.random.randn(len(vocab.vocabulary_), embedding_dim).astype(np.float32) * np.sqrt(2.0 / len(vocab.vocabulary_))
     # load any vectors from the word2vec
     print("Load glove file {0}".format(word2vec_path))
     f = open(word2vec_path, 'r', encoding='utf8')

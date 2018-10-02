@@ -22,47 +22,19 @@ def attention(inputs, e1, e2, p1, p2, attention_size):
                                                                    num_type=3,
                                                                    latent_size=latent_size)  # (batch, hidden)
     e1_h = tf.concat([e1_h, e1_type], axis=-1)  # (batch, hidden+latent)
-    # e1_h = tf.add(_e1_h, e1_type)  # (batch, hidden)
     e2_h = tf.concat([e2_h, e2_type], axis=-1)  # (batch, hidden+latent)
-    # e2_h = tf.add(_e2_h, e2_type)  # (batch, hidden)
 
-    # # v*tanh(Wh+Wp1+Wp2+W(e2-e1)) 83.6%
-    # h = tf.layers.dense(inputs, attention_size, kernel_initializer=initializer())
-    # p1_h = tf.layers.dense(p1, attention_size, kernel_initializer=initializer())
-    # p2_h = tf.layers.dense(p2, attention_size, kernel_initializer=initializer())
-    # e_h = tf.layers.dense(tf.subtract(e2_h, e1_h), attention_size, kernel_initializer=initializer())
-    # e_h = tf.reshape(tf.tile(e_h, [1, seq_len]), [-1, seq_len, attention_size])
-    # v = tf.tanh(tf.add_n([h, p1_h, p2_h, e_h]))
-    #
-    # u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer())
-    # vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
-    # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
-
-    # # v*tanh(Wh+Wp1+Wp2+We1+We1) 83.87%
-    # h = tf.layers.dense(inputs, attention_size, kernel_initializer=initializer())
-    # p1_h = tf.layers.dense(p1, attention_size, kernel_initializer=initializer())
-    # p2_h = tf.layers.dense(p2, attention_size, kernel_initializer=initializer())
-    # e1_h = tf.layers.dense(e1_h, attention_size, kernel_initializer=initializer())
-    # e1_h = tf.reshape(tf.tile(e1_h, [1, seq_len]), [-1, seq_len, attention_size])
-    # e2_h = tf.layers.dense(e2_h, attention_size, kernel_initializer=initializer())
-    # e2_h = tf.reshape(tf.tile(e2_h, [1, seq_len]), [-1, seq_len, attention_size])
-    # v = tf.tanh(tf.add_n([h, p1_h, p2_h, e1_h, e2_h]))
-    #
-    # u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer())
-    # vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
-    # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
-
-    # v*tanh(W*[h;p1;p2]+W*[e1;e2]) 85.18%? 84.33% 84.31%
-    e_h = tf.layers.dense(tf.concat([e1_h, e2_h], -1), attention_size, kernel_initializer=initializer())
+    # v*tanh(W*[h;p1;p2]+W*[e1;e2]) 85.18%? 84.83% 84.55%
+    e_h = tf.layers.dense(tf.concat([e1_h, e2_h], -1), attention_size, use_bias=False, kernel_initializer=initializer())
     e_h = tf.reshape(tf.tile(e_h, [1, seq_len]), [-1, seq_len, attention_size])
-    v = tf.layers.dense(tf.concat([inputs, p1, p2], axis=-1), attention_size, kernel_initializer=initializer())
+    v = tf.layers.dense(tf.concat([inputs, p1, p2], axis=-1), attention_size, use_bias=False, kernel_initializer=initializer())
     v = tf.tanh(tf.add(v, e_h))
 
     u_omega = tf.get_variable("u_omega", [attention_size], initializer=initializer())
     vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
     alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
-    # # v*tanh(W*[h;p1;p2;e1;e2]) 85.18% 84.41%
+    # v*tanh(W*[h;p1;p2;e1;e2]) 85.18% 84.41%
     # e1_h = tf.reshape(tf.tile(e1_h, [1, seq_len]), [-1, seq_len, hidden_size+latent_size])
     # e2_h = tf.reshape(tf.tile(e2_h, [1, seq_len]), [-1, seq_len, hidden_size+latent_size])
     # v = tf.concat([inputs, p1, p2, e1_h, e2_h], axis=-1)
@@ -72,41 +44,13 @@ def attention(inputs, e1, e2, p1, p2, attention_size):
     # vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (batch, seq_len)
     # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
 
-    # # [h;p1;p2]*W*tanh(We2-We1) 84.33%
-    # e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
-    # e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
-    # v = tf.concat([inputs, p1, p2], axis=-1)  # (batch, seq_len, hidden + 2*dist_emb_size)
-    # v = tf.layers.dense(v, attention_size, kernel_initializer=initializer())  # (batch, seq_len, attn_size)
-    #
-    # u_omega = tf.layers.dense(tf.subtract(e2_h, e1_h), attention_size, activation=tf.tanh,
-    #                           kernel_initializer=initializer())  # (batch, attn_size)
-    # vu = tf.matmul(v, tf.expand_dims(u_omega, axis=-1))  # (batch, seq_len, 1)
-    # vu = tf.reshape(vu, [-1, seq_len])  # (batch, seq_len)
-    # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
-
-    # # tanh(We1-We2)*tanh(Wh+Wp1+Wp2) 83.66%
-    # h = tf.layers.dense(inputs, attention_size, use_bias=False,
-    #                     kernel_initializer=initializer())  # (batch, seq_len, attn_size)
-    # p1_h = tf.layers.dense(p1, attention_size, use_bias=False,
-    #                        kernel_initializer=initializer())  # (batch, seq_len, attn_size)
-    # p2_h = tf.layers.dense(p2, attention_size, use_bias=False,
-    #                        kernel_initializer=initializer())  # (batch, seq_len, attn_size)
-    # e1_h = tf.layers.dense(e1_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
-    # e2_h = tf.layers.dense(e2_h, attention_size, use_bias=False, kernel_initializer=initializer())  # (batch, attn_size)
-    # v = tf.tanh(h + p1_h + p2_h)  # (batch, seq_len, attn_size)
-    #
-    # u_omega = tf.tanh(tf.subtract(e1_h, e2_h))  # (batch, attn_size)
-    # vu = tf.matmul(v, tf.expand_dims(u_omega, axis=-1))  # (batch, seq_len, 1)
-    # vu = tf.reshape(vu, [-1, seq_len])  # (batch, seq_len)
-    # alphas = tf.nn.softmax(vu, name='alphas')  # (batch, seq_len)
-
     # output
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)  # (batch, hidden)
 
     return output, alphas
 
 
-def latent_type_attention(e1, e2, num_type=3, latent_size=50):
+def latent_type_attention(e1, e2, num_type, latent_size):
     # Latent Entity Type Vectors
     latent_type = tf.get_variable("latent_type", shape=[num_type, latent_size], initializer=initializer())
 
