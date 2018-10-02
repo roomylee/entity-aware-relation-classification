@@ -107,6 +107,7 @@ def train():
 
             # Write vocabulary
             vocab_processor.save(os.path.join(out_dir, "vocab"))
+            pos_vocab_processor.save(os.path.join(out_dir, "pos_vocab"))
 
             # Initialize all variables
             sess.run(tf.global_variables_initializer())

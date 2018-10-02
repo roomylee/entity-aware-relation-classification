@@ -63,10 +63,10 @@ class SelfAttentiveLSTM:
 
         # Attention
         with tf.variable_scope('attention'):
-            self.attn, self.alphas = attention(self.rnn_outputs,
-                                               self.input_e1, self.input_e2,
-                                               self.p1, self.p2,
-                                               attention_size=attention_size)
+            self.attn, self.alphas, self.e1_alphas, self.e2_alphas = attention(self.rnn_outputs,
+                                                                               self.input_e1, self.input_e2,
+                                                                               self.p1, self.p2,
+                                                                               attention_size=attention_size)
 
         # Dropout
         with tf.variable_scope('dropout'):

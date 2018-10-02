@@ -47,7 +47,7 @@ def attention(inputs, e1, e2, p1, p2, attention_size):
     # output
     output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1)  # (batch, hidden)
 
-    return output, alphas
+    return output, alphas, e1_alphas, e2_alphas
 
 
 def latent_type_attention(e1, e2, num_type, latent_size):
