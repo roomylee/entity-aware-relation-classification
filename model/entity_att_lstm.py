@@ -5,7 +5,7 @@ from utils import initializer
 from model.attention import multihead_attention, attention
 
 
-class SelfAttentiveLSTM:
+class EntityAttentionLSTM:
     def __init__(self, sequence_length, num_classes,
                  vocab_size, embedding_size, pos_vocab_size, pos_embedding_size,
                  hidden_size, num_heads, attention_size,

@@ -6,7 +6,7 @@ import tensorflow as tf
 import data_helpers
 from configure import FLAGS
 from logger import Logger
-from model.self_att_lstm import SelfAttentiveLSTM
+from model.entity_att_lstm import EntityAttentionLSTM
 import utils
 
 import warnings
@@ -61,7 +61,7 @@ def train():
         session_conf.gpu_options.allow_growth = FLAGS.gpu_allow_growth
         sess = tf.Session(config=session_conf)
         with sess.as_default():
-            model = SelfAttentiveLSTM(
+            model = EntityAttentionLSTM(
                 sequence_length=train_x.shape[1],
                 num_classes=train_y.shape[1],
                 vocab_size=len(vocab_processor.vocabulary_),
