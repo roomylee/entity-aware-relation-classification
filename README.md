@@ -25,6 +25,16 @@ $ python train.py --help
 $ python train.py --embeddings glove300
 ```
 
+
+## Visualization
+* Self Attention
+![sa](https://user-images.githubusercontent.com/15166794/52579583-c7339100-2e69-11e9-93a3-b1aa2aafa19f.png)
+* Latent Type Representations
+![vec](https://user-images.githubusercontent.com/15166794/52579615-d6b2da00-2e69-11e9-80cb-3b566c28918a.png)
+* Sets of Entities grouped by Latent Type
+![type](https://user-images.githubusercontent.com/15166794/52579616-d74b7080-2e69-11e9-9e3a-c027eb01413b.png)
+
+
 ## SemEval-2010 Task #8
 * Given: a pair of *nominals*
 * Goal: recognize the semantic relation between these nominals.
